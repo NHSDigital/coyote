@@ -1,0 +1,122 @@
+from pathlib import Path
+import os
+
+from utils import *
+
+def test_package_init():
+    with CoyoteTestContext() as ctx:
+        coyote('package', 'init', 'test')
+        assert os.path.isdir('.cypkg')
+        assert os.path.isdir('.cypkg/test')
+        assert os.path.isfile('.cypkg/test/DEPENDS')
+        assert os.path.isfile('.cypkg/test/CONFLICTS')
+
+
+def test_package_build():
+    with CoyoteTestContext():
+        create_package('test')
+        git('tag', 'coyote-v1.42.0')
+
+        coyote('package', 'build', 'test')
+
+        assert os.path.isfile('test-v1.42.0.cypkg')
+
+
+def test_package_builds_highest_tag_by_default():
+    with CoyoteTestContext():
+        create_package('test')
+        git('tag', 'coyote-v1.43.0')
+        git('tag', 'coyote-v1.42.0')
+
+        coyote('package', 'build', 'test')
+
+        assert os.path.isfile('test-v1.43.0.cypkg')
+
+
+def test_package_build_includes_directory_content():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            git('tag', 'coyote-v1.42.0')
+            package_name = coyote('package', 'build', 'test').stdout.decode('utf-8').strip()
+
+            os.rename(package_name, workdir / package_name)
+
+        extractdir = workdir / 'extract'
+        with NewDirContext(extractdir):
+            assert(unpack(workdir / package_name).returncode == 0)
+            assert(Path('example-file').is_file())
+
+
+def test_package_build_includes_package_metadata():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            git('tag', 'coyote-v1.42.0')
+            package_name = coyote('package', 'build', 'test').stdout.decode('utf-8').strip()
+
+            os.rename(package_name, workdir / package_name)
+
+        extractdir = workdir / 'extract'
+        with NewDirContext(extractdir):
+            assert(unpack(workdir / package_name).returncode == 0)
+            cymeta = Path('.CYMETA')
+            assert((cymeta / 'DEPENDS').is_file())
+            assert((cymeta / 'CONFLICTS').is_file())
+            assert((cymeta / 'VERSION').is_file())
+            assert((cymeta / 'NAME').is_file())
+
+            assert((cymeta / 'VERSION').read_text().strip() == 'v1.42.0')
+            assert((cymeta / 'NAME').read_text().strip() == 'test')
+
+
+def test_package_build_excludes_cypkg_directory():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            git('tag', 'coyote-v1.42.0')
+            package_name = coyote('package', 'build', 'test').stdout.decode('utf-8').strip()
+
+            os.rename(package_name, workdir / package_name)
+
+        extractdir = workdir / 'extract'
+        with NewDirContext(extractdir):
+            assert(unpack(workdir / package_name).returncode == 0)
+            t = extractdir / '.cypkg'
+            print(list(t.glob("**/*")))
+            assert(not (extractdir / '.cypkg').is_dir())
+
+
+def test_package_build_includes_on_install_script():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            on_install_path = pkgdir / '.cypkg' / 'test' / 'on-install'
+            with open(on_install_path, 'w') as f:
+                f.write('#!/bin/sh\n')
+                f.write('echo "Hello, world!"\n')
+            on_install_path.chmod(0o755)
+
+            git('tag', 'coyote-v1.42.0')
+            package_name = coyote('package', 'build', 'test').stdout.decode('utf-8').strip()
+
+            os.rename(package_name, workdir / package_name)
+
+        extractdir = workdir / 'extract'
+        with NewDirContext(extractdir):
+            assert(unpack(workdir / package_name).returncode == 0)
+            on_install_extracted = Path('.CYMETA') / 'on-install'
+            assert(on_install_extracted.is_file())
+            assert(on_install_extracted.stat().st_mode & 0o755 != 0)

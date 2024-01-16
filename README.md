@@ -51,23 +51,26 @@ this file already installed.
 If you put a `on-install` file in `.cypkg/my-shiny-package` directory, that file
 will be executed on the target after the package has been unpacked.
 
-If you put a `build` file in `.cypkg/my-shiny-package`, that file will be
-executed to build the tarfile. It is expected to dump a tarfile to stdout. The
-default, if it is not supplied, is the equivalent of `tar cf - --exclude=.git`.
-
 The package will have an added `.CYPKG` directory at the top level. That
 directory will contain a `VERSION` file so that the filename is not constrained
 to contain version information, the `DEPENDS` file, and `on-install`. This
 directory is not copied to the target.
 
+If you put a `build` file in `.cypkg/my-shiny-package`, that file will be
+executed to build the tarfile. It is expected to dump a tarfile to stdout. The
+default, if it is not supplied, is the equivalent of `tar cf - --exclude=.git`.
+It is *not* responsible for the `.CYPKG` directory.
+
 ### Package versions
 
 Version numbers are expected to sort asciibetically. Otherwise there are no
-constraints.
+constraints.  They are stored as git tags, with an expected pattern of
+`coyote-vWHATEVER`.  You can pass an explicit version to `coyote package build` if
+you want to build a version that is not the last in the sorted list.
 
 ## Usage
 
-`coyote package new my-shiny-package`
+`coyote package init my-shiny-package`
 
 Create the `.cypkg/my-shiny-package` directory.
 
@@ -90,3 +93,10 @@ release to the source repository, identified as the git `origin` remote.
 Grabs the latest version of the package index. Fleshes out the dependency list
 for the named package, building an ordered list that can be installed without
 invalidating the dependency requirements of any package installed.
+
+`coyote apply <package-file>`
+
+Just install the package file.  This will ignore the source repository, and will
+instal no dependencies.  It *will* obey `CONFLICTS` and refuse to install if
+there is already a conflicting dependency installed.
+
