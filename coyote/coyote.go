@@ -27,7 +27,7 @@ func RunApply(context *core.Context, args []string) {
 func RunInit(context *core.Context, args []string) {
 	projectName := args[1]
 	techStack := args[0]
-	indexLocation := ".coyote/index" //Expect relative to project root
+	indexLocation := context.Config.GetIndex()
 	for i, arg := range args {
 		if arg == "--index" {
 			indexLocation = args[i+1]
@@ -55,7 +55,7 @@ func RunIndex(context *core.Context, args []string) {
 
 func RunInstall(context *core.Context, args []string) {
 	pkgname := args[0]
-	indexLocation := ".coyote/index"
+	indexLocation := context.Config.GetIndex()
 	reinstall := false
 	for i, arg := range args {
 		if arg == "--index" {
@@ -85,7 +85,14 @@ func RunConfig(context *core.Context, args []string) {
 }
 
 func getConfig(args []string) (core.Config, error) {
-	configPath := os.ExpandEnv("${HOME}/.coyoterc")
+	defaultConfigPath := os.ExpandEnv("${HOME}/.coyoterc")
+
+	configPath := os.ExpandEnv("${COYOTE_CONFIG}")
+
+	if configPath == "" {
+		configPath = defaultConfigPath
+	}
+
 	for i, arg := range args {
 		if arg == "--config" {
 			configPath = args[i+1]

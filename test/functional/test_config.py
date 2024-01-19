@@ -19,4 +19,11 @@ def test_get_override_config_path():
         config_path = unchecked_coyote('config', 'path', '--config', 'foo').stderr.strip()
         assert('foo does not exist' in config_path.decode("utf-8"))
 
-# TODO test get value from config
+# TODO test that we can pass the config path as an environment variable
+def test_environment_variable_config_path():
+    with CoyoteTestContext() as ctx:
+        config_path = ctx.path()/"config"
+        config_path.write_text("index = \"/dev/null\"\n")
+
+        output = coyote('config', 'path', config=None, env={'COYOTE_CONFIG': str(config_path)}).stdout.strip()
+        assert(output.decode("utf-8") == str(config_path))
