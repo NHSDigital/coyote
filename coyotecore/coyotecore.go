@@ -81,7 +81,7 @@ func ReadMetadata(pkgFilename string, field string) string {
 	}
 }
 
-func PackageBuild(pkgname string) {
+func PackageBuild(pkgname string, outdir string) {
 	version := versionFromTags()
 	filename := pkgname + "-" + version + ".cypkg"
 
@@ -108,8 +108,19 @@ func PackageBuild(pkgname string) {
 	os.Mkdir(".cypkg/tmp", 0777)
 	exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".").Run()
 
-	os.Rename(".cypkg/tmp/"+filename, filename)
-	fmt.Println(filename)
+	if _, err := os.Stat(outdir); os.IsNotExist(err) {
+		os.MkdirAll(outdir, 0777)
+	} else if err != nil {
+		panic(err)
+	}
+	outfile := outdir + "/" + filename
+
+	err = os.Rename(".cypkg/tmp/"+filename, outfile)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(outfile)
 }
 
 func readInstalledPackages() ([]string, error) {

@@ -11,11 +11,19 @@ import (
 func RunPackage(context *core.Context, args []string) {
 	subcmd := args[0]
 	pkgname := args[1]
+
+	outdir := "."
+	for i, arg := range args {
+		if arg == "--output" {
+			outdir = args[i+1]
+		}
+	}
+
 	switch subcmd {
 	case "init":
 		core.PackageInit(pkgname)
 	case "build":
-		core.PackageBuild(pkgname)
+		core.PackageBuild(pkgname, outdir)
 	}
 }
 

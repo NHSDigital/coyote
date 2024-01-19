@@ -120,3 +120,17 @@ def test_package_build_includes_on_install_script():
             on_install_extracted = Path('.CYMETA') / 'on-install'
             assert(on_install_extracted.is_file())
             assert(on_install_extracted.stat().st_mode & 0o755 != 0)
+
+def test_set_build_output_directory():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        outdir = workdir / 'build'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            git('tag', 'coyote-v1.42.0')
+            result = coyote('package', 'build', 'test', '--output', str(outdir))
+            package_name = result.stdout.decode('utf-8').strip()
+
+            assert((outdir / package_name).is_file())
