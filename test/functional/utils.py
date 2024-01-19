@@ -3,16 +3,33 @@ import os
 import tempfile
 import subprocess
 
-def unchecked_coyote(*args):
-    """Run the coyote command, ignoring the return code. Use this if you are testing for an error."""
-    coyote_path = Path(__file__).resolve().parent / '..' / '..' / 'build' / 'bin' / 'coyote'
-    return subprocess.run([str(coyote_path)] + list(args),
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
+def unchecked_coyote(*args, config="", env=os.environ):
+    """Run the coyote command, ignoring the return code. Use this if you are testing for an error.
 
-def coyote(*args):
+    Pass config="" to use the default config. Pass config=None not to write a config file.  This
+    is only useful for checking that the default config path is correct."""
+    coyote_path = Path(__file__).resolve().parent / '..' / '..' / 'build' / 'bin' / 'coyote'
+
+    run = lambda args: subprocess.run([str(coyote_path)] + list(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env)
+    if config is None:
+        return run(args)
+
+    if config == "":
+        config = "index = \"/dev/null\"\n"
+
+    with tempfile.NamedTemporaryFile(mode='w') as f:
+        f.write(config)
+        f.flush()
+        args = ['--config', f.name] + list(args)
+
+        return run(args)
+
+def coyote(*args, config="", env=os.environ):
     """Run the coyote command, returning the result."""
-    result = unchecked_coyote(*args)
+    result = unchecked_coyote(*args, config=config, env=env)
     if result.returncode != 0:
         raise Exception(result.stderr.decode('utf-8', 'ignore'))
     return result

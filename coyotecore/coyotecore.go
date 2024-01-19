@@ -112,17 +112,6 @@ func PackageBuild(pkgname string) {
 	fmt.Println(filename)
 }
 
-func RunPackage(args []string) {
-	subcmd := args[0]
-	pkgname := args[1]
-	switch subcmd {
-	case "init":
-		PackageInit(pkgname)
-	case "build":
-		PackageBuild(pkgname)
-	}
-}
-
 func readInstalledPackages() ([]string, error) {
 	installedFilename := ".coyote/installed"
 	if _, err := os.Stat(installedFilename); os.IsNotExist(err) {
@@ -249,11 +238,6 @@ func templateString(contents string, vars ProjectTemplateVars) string {
 		panic(err)
 	}
 	return templated.String()
-}
-
-func RunApply(args []string) {
-	filename := args[0]
-	Apply(filename)
 }
 
 func appendInstalledPackage(packageName string, version string) {
@@ -401,14 +385,13 @@ func stringInSlice(str string, slice []string) bool {
 	return false
 }
 
-func Init(techStack string, projectName string, index string) {
+func Init(techStack string, projectName string, index string) error {
 	// This function creates a new Coyote project, named projectName.
 	// The project will be created in the current directory.
 	// The name will be stored in .coyote/project-name.
 
 	if _, err := os.Stat(projectName); err == nil {
-		fmt.Fprintf(os.Stderr, "Project %s already exists.\n", projectName)
-		os.Exit(1)
+		return fmt.Errorf("Project %s already exists.\n", projectName)
 	}
 	// Now we make the project directory and store the name in .coyote/project-name.
 	os.MkdirAll(projectName+"/.coyote", 0777)
@@ -418,19 +401,20 @@ func Init(techStack string, projectName string, index string) {
 
 		indexFile, err := OpenIndexFile(index)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening index file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Error opening index file: %v\n", err)
 		}
 		//Now we extract the package to the project directory. After this, index is
 		//no longer valid, use indexFile.filename instead.
 		os.Chdir(projectName)
 		defer os.Chdir("..")
 
-		installPackageTree(techStack, indexFile, false)
+		return installPackageTree(techStack, indexFile, false)
+	} else {
+		return nil
 	}
 }
 
-func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
+func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
 
 	depQueue := []string{pkg}
@@ -441,9 +425,8 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 		depQueue = depQueue[1:]
 		newDeps, err := indexFile.readPackageDependencies(dep)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting dependencies for %s from index file %s: %v\n",
+			return fmt.Errorf("Error getting dependencies for %s from index file %s: %v\n",
 				dep, indexFile.filename, err)
-			os.Exit(1)
 		}
 		for _, newDep := range newDeps {
 			if !stringInSlice(newDep, depQueue) && !stringInSlice(newDep, depsToInstall) {
@@ -464,7 +447,7 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 	// against that list.
 	installeds, err := readInstalledPackages()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("Error reading installed packages: %v", err)
 	}
 
 	// Here note that we only check conflicts in one direction.  The dependency needs to be
@@ -475,12 +458,10 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 	for _, dep := range depsToInstall {
 		conflicts, err := indexFile.readPackageConflicts(dep)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting conflicts for %s from index file %s: %v\n",
+			return fmt.Errorf("Error getting conflicts for %s from index file %s: %v\n",
 				dep, indexFile.filename, err)
-			os.Exit(1)
 		}
 		for _, conflict := range conflicts {
-			fmt.Fprintf(os.Stderr, "Checking %s for conflict %s against %s\n", dep, conflict, installeds)
 			if stringInSlice(conflict, installeds) {
 				conflictMap[dep] = append(conflictMap[dep], conflict)
 			}
@@ -488,8 +469,7 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 	}
 
 	if len(conflictMap) > 0 {
-		fmt.Fprintf(os.Stderr, "Conflicts found: %v\n", conflictMap)
-		os.Exit(1)
+		return fmt.Errorf("Conflicts found: %v\n", conflictMap)
 	}
 
 	// Now we have the list of dependencies to install, so we can install them.
@@ -498,7 +478,7 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 
 		installeds, err := readInstalledPackages()
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("Error reading installed packages: %v", err)
 		}
 
 		if stringInSlice(dep, installeds) && !(reinstall && dep == pkg) {
@@ -507,65 +487,48 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) {
 
 		location, err := indexFile.readPackageLocation(dep)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting package location: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Error getting package location: %v\n", err)
 		}
 
 		if locationIsRemote(location) {
 			location, err = DownloadFile(location)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error downloading package: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("Error downloading package: %v\n", err)
 			}
 			defer os.Remove(location)
 		}
 
 		if _, err := os.Stat(location); err != nil {
-			fmt.Fprintf(os.Stderr, "Package file missing: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Package file missing: %v\n", err)
 		}
 
 		extractPackage(location)
 		err = runOnInstall(location)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error running on-install script: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Error running on-install script: %v\n", err)
 		}
 	}
+	return nil
 }
 
-func Install(pkgname string, index string, reinstall bool) {
+func Install(pkgname string, index string, reinstall bool) error {
 	localIndex := index
 	if locationIsRemote(index) {
 		myLocalIndex, err := DownloadFile(index)
 		localIndex = myLocalIndex
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error downloading index file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Error downloading index file: %v\n", err)
 		}
 		defer os.Remove(localIndex)
 	}
 
 	indexFile, err := OpenIndexFile(localIndex)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening index file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error opening index file: %v\n", err)
 	}
 
-	installPackageTree(pkgname, indexFile, reinstall)
-}
-
-func RunInit(args []string) {
-	projectName := args[1]
-	techStack := args[0]
-	indexLocation := ".coyote/index" //Expect relative to project root
-	for i, arg := range args {
-		if arg == "--index" {
-			indexLocation = args[i+1]
-		}
-	}
-	Init(techStack, projectName, indexLocation)
+	return installPackageTree(pkgname, indexFile, reinstall)
 }
 
 type Package struct {
@@ -611,7 +574,7 @@ func DownloadFile(location string) (string, error) {
 	return "/tmp/" + basename, nil
 }
 
-func RunIndex(args []string) {
+func BuildIndex(indexSourceFilename string, indexFilename string) error {
 	// This function reads an index source file, and outputs an index file.
 	// The index file is a map of package names to locations and dependencies.
 	// Locations in the index source file can be relative to the file being indexed, or absolute.
@@ -621,13 +584,9 @@ func RunIndex(args []string) {
 	// It functions by opening each package, reading its metadata, and then
 	// writing it to the index file.
 
-	// Ignore the first argument, which is the subcommand. Unused for the moment.
-	indexSourceFilename := args[1]
-	indexFilename := args[2]
-
 	indexSource, err := os.Open(indexSourceFilename)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("Error opening index source file: %v", err)
 	}
 	defer indexSource.Close()
 
@@ -647,8 +606,7 @@ func RunIndex(args []string) {
 		if locationIsRemote(packageLocation) {
 			localLocation, err = DownloadFile(packageLocation)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error downloading package: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("Error downloading package %s: %v\n", packageLocation, err)
 			}
 			defer os.Remove(localLocation)
 		} else {
@@ -673,18 +631,20 @@ func RunIndex(args []string) {
 	for _, pkg := range packages {
 		for _, conflict := range pkg.Conflicts {
 			if _, ok := packages[conflict]; ok {
-				// Can't assign to pkg.Conflicts, so we have to make a new one.
-				packages[conflict] = Package{
-					Name:         packages[conflict].Name,
-					Version:      packages[conflict].Version,
-					Location:     packages[conflict].Location,
-					Dependencies: packages[conflict].Dependencies,
-					Conflicts:    append(packages[conflict].Conflicts, pkg.Name),
+				if !stringInSlice(pkg.Name, packages[conflict].Conflicts) {
+					// Can't assign to pkg.Conflicts, so we have to make a new one.
+					packages[conflict] = Package{
+						Name:         packages[conflict].Name,
+						Version:      packages[conflict].Version,
+						Location:     packages[conflict].Location,
+						Dependencies: packages[conflict].Dependencies,
+						Conflicts:    append(packages[conflict].Conflicts, pkg.Name),
+					}
 				}
 			} else {
 				// We don't have the named package in the index. The most dangerous case is that
 				// it's a typo and someone will install incompatible packages, so we need to barf.
-				fmt.Fprintf(os.Stderr, "Package %s conflicts with %s, but %s is not in the index.\n",
+				return fmt.Errorf("Package %s conflicts with %s, but %s is not in the index.\n",
 					pkg.Name, conflict, conflict)
 			}
 		}
@@ -692,7 +652,7 @@ func RunIndex(args []string) {
 
 	indexFile, err := os.Create(indexFilename)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("Error creating index file: %v", err)
 	}
 	defer indexFile.Close()
 
@@ -701,6 +661,7 @@ func RunIndex(args []string) {
 	index.Packages = packages
 
 	json.NewEncoder(indexFile).Encode(index)
+	return nil
 }
 
 func removeComments(body string) []string {
@@ -730,38 +691,4 @@ func readIndexEntry(packageLocation string) Package {
 	pkg.Conflicts = removeComments(ReadMetadata(packageLocation, "CONFLICTS"))
 	pkg.Dependencies = removeComments(ReadMetadata(packageLocation, "DEPENDS"))
 	return pkg
-}
-
-func RunInstall(args []string) {
-	pkgname := args[0]
-	indexLocation := ".coyote/index"
-	reinstall := false
-	for i, arg := range args {
-		if arg == "--index" {
-			indexLocation = args[i+1]
-		}
-		if arg == "--reinstall" {
-			reinstall = true
-		}
-	}
-	Install(pkgname, indexLocation, reinstall)
-}
-
-func Run(args []string) {
-	cmd := args[0]
-	switch cmd {
-	case "package":
-		RunPackage(args[1:])
-	case "apply":
-		RunApply(args[1:])
-	case "init":
-		RunInit(args[1:])
-	case "index":
-		RunIndex(args[1:])
-	case "install":
-		RunInstall(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
-		os.Exit(1)
-	}
 }

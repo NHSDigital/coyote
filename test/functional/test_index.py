@@ -19,17 +19,19 @@ def test_index_creates_file():
 def test_index_lists_conflicts():
     with CoyoteTestContext() as ctx:
         package_path1 = PackageTemplate('test-package-root') \
-            .add_conflict('conflicted-package', 'no-such-package') \
+            .add_conflict('conflicted-package', 'other-package') \
             .build(ctx.path(), 'conflicted-package')
+        package_path2 = PackageTemplate('test-other-package') \
+            .build(ctx.path(), 'other-package')
 
         index_source_path = ctx.path()/"index-source"
-        index_source_path.write_text(str(package_path1))
+        index_source_path.write_text('\n'.join(str(package_path) for package_path in [package_path1, package_path2]))
         target_path = ctx.path()/"index.cyi"
 
         coyote('index', 'build', index_source_path, target_path)
 
         index = json.loads(target_path.read_text())
-        assert(index['packages']['conflicted-package']['conflicts'] == ['no-such-package'])
+        assert(index['packages']['conflicted-package']['conflicts'] == ['other-package'])
 
 
 def test_conflicts_are_reflected():
