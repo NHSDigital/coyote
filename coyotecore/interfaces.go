@@ -36,3 +36,11 @@ type Context struct {
 type PackageTemplateVars struct {
 	ProjectName string
 }
+
+type IProvideSourceControl interface {
+	IsNameAvailable(repo string, org string) (bool, error)
+	CreateRepo(repo string, org string) error
+	DeleteRepo(repo string, org string) error
+	CreateRelease(repo string, org string, tag string, filenames []string) ([]string, error)
+	DeleteRelease(repo string, org string, tag string) error
+}
