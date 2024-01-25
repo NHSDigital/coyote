@@ -29,7 +29,7 @@ func readInstalledPackages() ([]string, error) {
 	return installedArr, nil
 }
 
-func conflictsFound(pkg PackageFile) []string {
+func conflictingInstalledPackages(pkg PackageFile) []string {
 	result := []string{}
 	installeds, err := readInstalledPackages()
 	if err != nil {
@@ -117,7 +117,7 @@ func runOnInstall(pkg PackageFile) error {
 func Apply(context *Context, filename string) {
 	checkForCoyoteProject()
 	pkg := context.PackageFiles.Open(filename)
-	conflicts := conflictsFound(pkg)
+	conflicts := conflictingInstalledPackages(pkg)
 	if len(conflicts) == 0 {
 		pkg := extractPackage(context.PackageFiles, filename)
 		err := runOnInstall(pkg)
@@ -144,7 +144,7 @@ type IndexFile struct {
 	contents Index
 }
 
-func OpenIndexFile(filename string) (IndexFile, error) {
+func openIndexFile(filename string) (IndexFile, error) {
 
 	st, err := os.Stat(filename)
 	if err != nil {
@@ -237,7 +237,7 @@ func Init(context *Context, techStack string, projectName string, index string) 
 
 	if techStack != "empty" {
 
-		indexFile, err := OpenIndexFile(index)
+		indexFile, err := openIndexFile(index)
 		if err != nil {
 			return fmt.Errorf("Error opening index file: %v\n", err)
 		}
@@ -329,7 +329,7 @@ func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile
 		}
 
 		if locationIsRemote(location) {
-			location, err = DownloadFile(location)
+			location, err = downloadFile(location)
 			if err != nil {
 				return fmt.Errorf("Error downloading package: %v\n", err)
 			}
@@ -353,7 +353,7 @@ func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile
 func Install(context *Context, pkgname string, index string, reinstall bool) error {
 	localIndex := index
 	if locationIsRemote(index) {
-		myLocalIndex, err := DownloadFile(index)
+		myLocalIndex, err := downloadFile(index)
 		localIndex = myLocalIndex
 		if err != nil {
 			return fmt.Errorf("Error downloading index file: %v\n", err)
@@ -361,7 +361,7 @@ func Install(context *Context, pkgname string, index string, reinstall bool) err
 		defer os.Remove(localIndex)
 	}
 
-	indexFile, err := OpenIndexFile(localIndex)
+	indexFile, err := openIndexFile(localIndex)
 	if err != nil {
 		return fmt.Errorf("Error opening index file: %v\n", err)
 	}
@@ -386,7 +386,7 @@ func locationIsRemote(location string) bool {
 	return strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://")
 }
 
-func DownloadFile(location string) (string, error) {
+func downloadFile(location string) (string, error) {
 	// This function downloads a file from a remote location, and returns the local filename.
 	// It returns an error if the download fails.
 	// The file is downloaded to /tmp, and the filename is returned.
@@ -466,7 +466,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 
 		// packageLocation can be remote: http:// or https:// mean that we need to download the package.
 		if locationIsRemote(packageLocation) {
-			localLocation, err = DownloadFile(packageLocation)
+			localLocation, err = downloadFile(packageLocation)
 			if err != nil {
 				return fmt.Errorf("Error downloading package %s: %v\n", packageLocation, err)
 			}
