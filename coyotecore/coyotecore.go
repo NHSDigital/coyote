@@ -1,10 +1,7 @@
 package coyotecore
 
 import (
-	"archive/tar"
 	"bufio"
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,116 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"sort"
 	"strings"
-	"text/template"
 )
-
-func PackageInit(pkgname string) {
-	os.Mkdir(".cypkg", 0777)
-	os.Mkdir(".cypkg/"+pkgname, 0777)
-	os.WriteFile(".cypkg/"+pkgname+"/DEPENDS",
-		[]byte("# List package dependencies here, one per line."),
-		0777)
-	os.WriteFile(".cypkg/"+pkgname+"/CONFLICTS",
-		[]byte("# List package conflicts here, one per line."),
-		0777)
-}
-
-func CopyFile(src, dst string) {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		panic(err)
-	}
-	defer srcFile.Close()
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		panic(err)
-	}
-	defer dstFile.Close()
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func CopyFileIfExist(src, dst string) {
-	if _, err := os.Stat(src); err == nil {
-		CopyFile(src, dst)
-	}
-}
-
-func versionFromTags() string {
-	cmd := exec.Command("git", "tag", "--list", "coyote-*")
-	output, err := cmd.Output()
-	if err != nil {
-		panic(err)
-	}
-
-	versions := strings.Split(string(output), "\n")
-	sort.Strings(versions)
-
-	version := versions[len(versions)-1]
-	version = strings.TrimSpace(version)
-	version = strings.TrimPrefix(version, "coyote-")
-	return version
-}
-
-func ReadMetadata(pkgFilename string, field string) string {
-	fileCheck := exec.Command("tar", "-tf", pkgFilename, ".CYMETA/"+field)
-	if err := fileCheck.Run(); err != nil {
-		return ""
-	} else {
-		cmd := exec.Command("tar", "-xOf", pkgFilename, ".CYMETA/"+field)
-		output, err := cmd.Output()
-		if err != nil {
-			panic(err)
-		}
-		return strings.TrimSpace(string(output))
-	}
-}
-
-func PackageBuild(pkgname string, outdir string) {
-	version := versionFromTags()
-	filename := pkgname + "-" + version + ".cypkg"
-
-	tempDir, err := os.MkdirTemp("", "coyote")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	err = exec.Command("git", "clone", ".", tempDir).Run()
-	if err != nil {
-		panic(err)
-	}
-	os.RemoveAll(tempDir + "/.git")
-	os.RemoveAll(tempDir + "/.cypkg")
-
-	os.Mkdir(tempDir+"/.CYMETA", 0777)
-	CopyFile(".cypkg/"+pkgname+"/DEPENDS", tempDir+"/.CYMETA/DEPENDS")
-	CopyFile(".cypkg/"+pkgname+"/CONFLICTS", tempDir+"/.CYMETA/CONFLICTS")
-	os.WriteFile(tempDir+"/.CYMETA/VERSION", []byte(version), 0777)
-	os.WriteFile(tempDir+"/.CYMETA/NAME", []byte(pkgname), 0777)
-	CopyFileIfExist(".cypkg/"+pkgname+"/on-install", tempDir+"/.CYMETA/on-install")
-
-	os.Mkdir(".cypkg/tmp", 0777)
-	exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".").Run()
-
-	if _, err := os.Stat(outdir); os.IsNotExist(err) {
-		os.MkdirAll(outdir, 0777)
-	} else if err != nil {
-		panic(err)
-	}
-	outfile := outdir + "/" + filename
-
-	err = os.Rename(".cypkg/tmp/"+filename, outfile)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(outfile)
-}
 
 func readInstalledPackages() ([]string, error) {
 	installedFilename := ".coyote/installed"
@@ -151,7 +40,7 @@ func conflictsFound(filename string) []string {
 		return result
 	}
 
-	conflicts := ReadMetadata(filename, "CONFLICTS")
+	conflicts := NewPackageFile(filename).ReadMetadata("CONFLICTS")
 	conflicts = strings.TrimSpace(conflicts)
 	conflictsArr := strings.Split(conflicts, "\n")
 
@@ -165,10 +54,6 @@ func conflictsFound(filename string) []string {
 	return result
 }
 
-type ProjectTemplateVars struct {
-	ProjectName string
-}
-
 func projectReadProjectName() string {
 	pkgname, err := os.ReadFile(".coyote/project-name")
 	if err != nil {
@@ -178,77 +63,16 @@ func projectReadProjectName() string {
 }
 
 func extractPackage(filename string) {
-	// This function extracts the package to the current directory, and templates each with text/template.
-	// We don't extract files in .CYMETA, that's just for coyote to use, but we do record the installation
+	// This function extracts the package to the project. We record the installation
 	// in .coyote/installed.
 
-	// For each file in the package, we extract it as a string, and then template it.
-	// We then write the templated string to the file.
-
-	var vars ProjectTemplateVars
+	var vars PackageTemplateVars
 	vars.ProjectName = projectReadProjectName()
+	pkg := NewPackageFile(filename)
 
-	tarFile, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer tarFile.Close()
-	gzipReader, err := gzip.NewReader(tarFile)
-	if err != nil {
-		panic(err)
-	}
-	defer gzipReader.Close()
+	applyTemplatedPackage(filename, vars)
 
-	files := tar.NewReader(gzipReader)
-	for {
-		header, err := files.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		if strings.HasPrefix(header.Name, "./.CYMETA/") {
-			continue
-		}
-
-		extractFile(header, vars, files)
-	}
-
-	appendInstalledPackage(ReadMetadata(filename, "NAME"), ReadMetadata(filename, "VERSION"))
-}
-
-func extractFile(header *tar.Header, vars ProjectTemplateVars, file *tar.Reader) {
-	templatedFilename := templateString(header.Name, vars)
-	mode := header.FileInfo().Mode()
-
-	if header.Typeflag == tar.TypeDir {
-		os.MkdirAll(templatedFilename, mode)
-	} else if header.Typeflag == tar.TypeSymlink {
-		target := header.Linkname
-		templatedTarget := templateString(target, vars)
-
-		os.Symlink(templatedTarget, templatedFilename)
-	} else {
-		contents, err := io.ReadAll(file)
-		if err != nil {
-			panic(err)
-		}
-		templatedContents := templateString(string(contents), vars)
-
-		os.WriteFile(templatedFilename, []byte(templatedContents), mode)
-	}
-}
-
-func templateString(contents string, vars ProjectTemplateVars) string {
-	tmpl := template.Must(template.New("file").Parse(contents))
-	var templated bytes.Buffer
-	err := tmpl.Execute(&templated, vars)
-	if err != nil {
-		panic(err)
-	}
-	return templated.String()
+	appendInstalledPackage(pkg.ReadMetadata("NAME"), pkg.ReadMetadata("VERSION"))
 }
 
 func appendInstalledPackage(packageName string, version string) {
@@ -263,7 +87,8 @@ func appendInstalledPackage(packageName string, version string) {
 }
 
 func runOnInstall(filename string) error {
-	onInstall := ReadMetadata(filename, "on-install")
+	pkg := NewPackageFile(filename)
+	onInstall := pkg.ReadMetadata("on-install")
 	if onInstall == "" {
 		return nil
 	}
@@ -689,17 +514,12 @@ func removeComments(body string) []string {
 }
 
 func readIndexEntry(packageLocation string) Package {
-	packageFile, err := os.Open(packageLocation)
-	if err != nil {
-		panic(err)
+	file := NewPackageFile(packageLocation)
+
+	return Package{
+		Name:         file.ReadMetadata("NAME"),
+		Version:      file.ReadMetadata("VERSION"),
+		Conflicts:    removeComments(file.ReadMetadata("CONFLICTS")),
+		Dependencies: removeComments(file.ReadMetadata("DEPENDS")),
 	}
-	defer packageFile.Close()
-
-	pkg := Package{}
-
-	pkg.Name = ReadMetadata(packageLocation, "NAME")
-	pkg.Version = ReadMetadata(packageLocation, "VERSION")
-	pkg.Conflicts = removeComments(ReadMetadata(packageLocation, "CONFLICTS"))
-	pkg.Dependencies = removeComments(ReadMetadata(packageLocation, "DEPENDS"))
-	return pkg
 }
