@@ -21,15 +21,15 @@ func RunPackage(context *core.Context, args []string) {
 
 	switch subcmd {
 	case "init":
-		core.PackageInit(pkgname)
+		core.PackageInit(context, pkgname)
 	case "build":
-		core.PackageBuild(pkgname, outdir)
+		core.PackageBuild(context, pkgname, outdir)
 	}
 }
 
 func RunApply(context *core.Context, args []string) {
 	filename := args[0]
-	core.Apply(filename)
+	core.Apply(context, filename)
 }
 
 func RunInit(context *core.Context, args []string) {
@@ -41,7 +41,7 @@ func RunInit(context *core.Context, args []string) {
 			indexLocation = args[i+1]
 		}
 	}
-	err := core.Init(techStack, projectName, indexLocation)
+	err := core.Init(context, techStack, projectName, indexLocation)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initialising project: %s\n", err)
 		os.Exit(1)
@@ -54,7 +54,7 @@ func RunIndex(context *core.Context, args []string) {
 	indexSourceFilename := args[1]
 	indexFilename := args[2]
 
-	err := core.BuildIndex(indexSourceFilename, indexFilename)
+	err := core.BuildIndex(context, indexSourceFilename, indexFilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error building index: %s\n", err)
 		os.Exit(1)
@@ -73,7 +73,7 @@ func RunInstall(context *core.Context, args []string) {
 			reinstall = true
 		}
 	}
-	err := core.Install(pkgname, indexLocation, reinstall)
+	err := core.Install(context, pkgname, indexLocation, reinstall)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error installing package: %s\n", err)
 		os.Exit(1)
@@ -141,7 +141,8 @@ func main() {
 	}
 
 	context := core.Context{
-		Config: config,
+		Config:       config,
+		PackageFiles: adapters.NewPackageTarFileProvider(),
 	}
 
 	//copy os.Args to a new slice, because we don't want to pass the first

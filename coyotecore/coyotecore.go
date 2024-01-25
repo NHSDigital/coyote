@@ -29,7 +29,7 @@ func readInstalledPackages() ([]string, error) {
 	return installedArr, nil
 }
 
-func conflictsFound(filename string) []string {
+func conflictsFound(pkg PackageFile) []string {
 	result := []string{}
 	installeds, err := readInstalledPackages()
 	if err != nil {
@@ -40,7 +40,7 @@ func conflictsFound(filename string) []string {
 		return result
 	}
 
-	conflicts := NewPackageFile(filename).ReadMetadata("CONFLICTS")
+	conflicts := pkg.ReadMetadata("CONFLICTS")
 	conflicts = strings.TrimSpace(conflicts)
 	conflictsArr := strings.Split(conflicts, "\n")
 
@@ -62,20 +62,22 @@ func projectReadProjectName() string {
 	return string(pkgname)
 }
 
-func extractPackage(filename string) {
+func extractPackage(packageFiles IProvidePackageFiles, filename string) PackageFile {
 	// This function extracts the package to the project. We record the installation
 	// in .coyote/installed.
 
 	var vars PackageTemplateVars
 	vars.ProjectName = projectReadProjectName()
-	pkg := NewPackageFile(filename)
+	pkg := packageFiles.Open(filename)
 
-	applyTemplatedPackage(filename, vars)
+	pkg.Apply(vars)
 
-	appendInstalledPackage(pkg.ReadMetadata("NAME"), pkg.ReadMetadata("VERSION"))
+	recordInstalledPackage(pkg.ReadMetadata("NAME"), pkg.ReadMetadata("VERSION"))
+
+	return pkg
 }
 
-func appendInstalledPackage(packageName string, version string) {
+func recordInstalledPackage(packageName string, version string) {
 	installedFilename := ".coyote/installed"
 
 	file, err := os.OpenFile(installedFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0777)
@@ -86,8 +88,7 @@ func appendInstalledPackage(packageName string, version string) {
 	file.Write([]byte(packageName + "=" + version + "\n"))
 }
 
-func runOnInstall(filename string) error {
-	pkg := NewPackageFile(filename)
+func runOnInstall(pkg PackageFile) error {
 	onInstall := pkg.ReadMetadata("on-install")
 	if onInstall == "" {
 		return nil
@@ -113,12 +114,13 @@ func runOnInstall(filename string) error {
 	return nil
 }
 
-func Apply(filename string) {
+func Apply(context *Context, filename string) {
 	checkForCoyoteProject()
-	conflicts := conflictsFound(filename)
+	pkg := context.PackageFiles.Open(filename)
+	conflicts := conflictsFound(pkg)
 	if len(conflicts) == 0 {
-		extractPackage(filename)
-		err := runOnInstall(filename)
+		pkg := extractPackage(context.PackageFiles, filename)
+		err := runOnInstall(pkg)
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error running on-install script: %v\n", err)
@@ -221,7 +223,7 @@ func stringInSlice(str string, slice []string) bool {
 	return false
 }
 
-func Init(techStack string, projectName string, index string) error {
+func Init(context *Context, techStack string, projectName string, index string) error {
 	// This function creates a new Coyote project, named projectName.
 	// The project will be created in the current directory.
 	// The name will be stored in .coyote/project-name.
@@ -244,13 +246,13 @@ func Init(techStack string, projectName string, index string) error {
 		os.Chdir(projectName)
 		defer os.Chdir("..")
 
-		return installPackageTree(techStack, indexFile, false)
+		return installPackageTree(context.PackageFiles, techStack, indexFile, false)
 	} else {
 		return nil
 	}
 }
 
-func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) error {
+func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
 
 	depQueue := []string{pkg}
@@ -338,8 +340,8 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) error {
 			return fmt.Errorf("Package file missing: %v\n", err)
 		}
 
-		extractPackage(location)
-		err = runOnInstall(location)
+		pkg := extractPackage(packageFiles, location)
+		err = runOnInstall(pkg)
 
 		if err != nil {
 			return fmt.Errorf("Error running on-install script: %v\n", err)
@@ -348,7 +350,7 @@ func installPackageTree(pkg string, indexFile IndexFile, reinstall bool) error {
 	return nil
 }
 
-func Install(pkgname string, index string, reinstall bool) error {
+func Install(context *Context, pkgname string, index string, reinstall bool) error {
 	localIndex := index
 	if locationIsRemote(index) {
 		myLocalIndex, err := DownloadFile(index)
@@ -364,7 +366,7 @@ func Install(pkgname string, index string, reinstall bool) error {
 		return fmt.Errorf("Error opening index file: %v\n", err)
 	}
 
-	return installPackageTree(pkgname, indexFile, reinstall)
+	return installPackageTree(context.PackageFiles, pkgname, indexFile, reinstall)
 }
 
 type Package struct {
@@ -410,7 +412,31 @@ func DownloadFile(location string) (string, error) {
 	return "/tmp/" + basename, nil
 }
 
-func BuildIndex(indexSourceFilename string, indexFilename string) error {
+func removeComments(body string) []string {
+	lines := strings.Split(body, "\n")
+	result := []string{}
+	for _, line := range lines {
+		line = strings.Split(line, "#")[0]
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
+}
+
+func readIndexEntry(packageFiles IProvidePackageFiles, packageLocation string) Package {
+	file := packageFiles.Open(packageLocation)
+
+	return Package{
+		Name:         file.ReadMetadata("NAME"),
+		Version:      file.ReadMetadata("VERSION"),
+		Conflicts:    removeComments(file.ReadMetadata("CONFLICTS")),
+		Dependencies: removeComments(file.ReadMetadata("DEPENDS")),
+	}
+}
+
+func BuildIndex(context *Context, indexSourceFilename string, indexFilename string) error {
 	// This function reads an index source file, and outputs an index file.
 	// The index file is a map of package names to locations and dependencies.
 	// Locations in the index source file can be relative to the file being indexed, or absolute.
@@ -456,7 +482,7 @@ func BuildIndex(indexSourceFilename string, indexFilename string) error {
 			}
 			localLocation = packageLocation
 		}
-		pkg := readIndexEntry(localLocation)
+		pkg := readIndexEntry(context.PackageFiles, localLocation)
 		pkg.Location = packageLocation
 		packages[pkg.Name] = pkg
 	}
@@ -500,26 +526,10 @@ func BuildIndex(indexSourceFilename string, indexFilename string) error {
 	return nil
 }
 
-func removeComments(body string) []string {
-	lines := strings.Split(body, "\n")
-	result := []string{}
-	for _, line := range lines {
-		line = strings.Split(line, "#")[0]
-		line = strings.TrimSpace(line)
-		if line != "" {
-			result = append(result, line)
-		}
-	}
-	return result
+func PackageInit(context *Context, pkgname string) {
+	context.PackageFiles.Init(pkgname)
 }
 
-func readIndexEntry(packageLocation string) Package {
-	file := NewPackageFile(packageLocation)
-
-	return Package{
-		Name:         file.ReadMetadata("NAME"),
-		Version:      file.ReadMetadata("VERSION"),
-		Conflicts:    removeComments(file.ReadMetadata("CONFLICTS")),
-		Dependencies: removeComments(file.ReadMetadata("DEPENDS")),
-	}
+func PackageBuild(context *Context, pkgname string, outdir string) {
+	context.PackageFiles.Build(pkgname, outdir)
 }

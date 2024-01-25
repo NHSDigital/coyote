@@ -1,4 +1,4 @@
-package coyotecore
+package coyoteadapters
 
 import (
 	"archive/tar"
@@ -11,19 +11,9 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+
+	core "nhs.uk/coyotecore"
 )
-
-type PackageFile struct {
-	Filename string
-}
-
-func NewPackageFile(filename string) PackageFile {
-	return PackageFile{Filename: filename}
-}
-
-func (p PackageFile) ReadMetadata(key string) string {
-	return ReadMetadata(p.Filename, key)
-}
 
 func CopyFile(src, dst string) {
 	srcFile, err := os.Open(src)
@@ -48,7 +38,39 @@ func CopyFileIfExist(src, dst string) {
 	}
 }
 
-func templateString(contents string, vars PackageTemplateVars) string {
+type PackageTarFile struct {
+	Filename string
+}
+
+type PackageTarFileProvider struct{}
+
+func NewPackageTarFileProvider() PackageTarFileProvider {
+	return PackageTarFileProvider{}
+}
+
+func NewPackageFile(filename string) PackageTarFile {
+	return PackageTarFile{Filename: filename}
+}
+
+func (p PackageTarFileProvider) Open(location string) core.PackageFile {
+	return NewPackageFile(location)
+}
+
+func (p PackageTarFile) ReadMetadata(field string) string {
+	fileCheck := exec.Command("tar", "-tf", p.Filename, ".CYMETA/"+field)
+	if err := fileCheck.Run(); err != nil {
+		return ""
+	} else {
+		cmd := exec.Command("tar", "-xOf", p.Filename, ".CYMETA/"+field)
+		output, err := cmd.Output()
+		if err != nil {
+			panic(err)
+		}
+		return strings.TrimSpace(string(output))
+	}
+}
+
+func templateString(contents string, vars core.PackageTemplateVars) string {
 	tmpl := template.Must(template.New("file").Parse(contents))
 	var templated bytes.Buffer
 	err := tmpl.Execute(&templated, vars)
@@ -69,18 +91,8 @@ func PackageInit(pkgname string) {
 		0777)
 }
 
-func ReadMetadata(pkgFilename string, field string) string {
-	fileCheck := exec.Command("tar", "-tf", pkgFilename, ".CYMETA/"+field)
-	if err := fileCheck.Run(); err != nil {
-		return ""
-	} else {
-		cmd := exec.Command("tar", "-xOf", pkgFilename, ".CYMETA/"+field)
-		output, err := cmd.Output()
-		if err != nil {
-			panic(err)
-		}
-		return strings.TrimSpace(string(output))
-	}
+func (p PackageTarFileProvider) Init(pkgname string) {
+	PackageInit(pkgname)
 }
 
 func versionFromTags() string {
@@ -141,11 +153,11 @@ func PackageBuild(pkgname string, outdir string) {
 	fmt.Println(outfile)
 }
 
-type PackageTemplateVars struct {
-	ProjectName string
+func (p PackageTarFileProvider) Build(pkgname string, outdir string) {
+	PackageBuild(pkgname, outdir)
 }
 
-func extractFile(header *tar.Header, vars PackageTemplateVars, file *tar.Reader) {
+func extractFile(header *tar.Header, vars core.PackageTemplateVars, file *tar.Reader) {
 	templatedFilename := templateString(header.Name, vars)
 	mode := header.FileInfo().Mode()
 
@@ -167,8 +179,8 @@ func extractFile(header *tar.Header, vars PackageTemplateVars, file *tar.Reader)
 	}
 }
 
-func applyTemplatedPackage(filename string, vars PackageTemplateVars) {
-	tarFile, err := os.Open(filename)
+func (p PackageTarFile) Apply(vars core.PackageTemplateVars) {
+	tarFile, err := os.Open(p.Filename)
 	if err != nil {
 		panic(err)
 	}

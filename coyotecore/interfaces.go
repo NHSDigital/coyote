@@ -17,6 +17,22 @@ func (c *NullConfig) GetPath() string {
 	return ""
 }
 
+type PackageFile interface {
+	ReadMetadata(field string) string
+	Apply(vars PackageTemplateVars)
+}
+
+type IProvidePackageFiles interface {
+	Init(pkgname string)
+	Build(pkgname string, outdir string)
+	Open(location string) PackageFile
+}
+
 type Context struct {
-	Config Config
+	Config       Config
+	PackageFiles IProvidePackageFiles
+}
+
+type PackageTemplateVars struct {
+	ProjectName string
 }
