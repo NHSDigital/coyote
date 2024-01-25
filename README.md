@@ -74,6 +74,18 @@ you want to build a version that is not the last in the sorted list.
 
 Create the `.cypkg/my-shiny-package` directory.
 
+TODO `coyote package new my-shiny-package`
+
+Do a `package init`, and push the empty package as a new github repo called `nhs-england-tools/cypkg-my-shiny-package`.
+
+TODO `coyote package delete my-shiny-package`
+
+Delete the github repo `nhs-england-tools/cypkg-my-shiny-package`.
+
+TODO `coyote package repo open`
+
+Open the browser at `https://github.com/nhs-england-tools/cypkg-my-shiny-package`.
+
 `coyote package build my-shiny-package`
 
 Copies non-git and non-coyote files to a temporary directory, and runs `build`.
@@ -83,7 +95,11 @@ zipped.
 The file will be written to the current directory as
 `my-shiny-package_<version>.cypkg`.
 
-`coyote package publish [filename]`
+TODO `coyote package publish`
+
+Just a git push, but won't do it unless HEAD has a coyote version tag.
+
+TODO `coyote package release [filename]`
 
 Pushes `filename`, defaulting to `my-shiny-package_<version>.cypkg`, as a
 release to the source repository, identified as the git `origin` remote.
