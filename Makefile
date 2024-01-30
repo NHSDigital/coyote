@@ -1,4 +1,4 @@
-default: exe test
+default: exe
 
 test/functional/.venv/bin/activate:
 	python3 -m venv test/functional/.venv
