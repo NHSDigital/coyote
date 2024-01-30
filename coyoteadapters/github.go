@@ -21,7 +21,6 @@ func NewGithubSourceControl(authToken string) GithubSourceControl {
 	}
 }
 
-// TODO test for a repo name
 // we do this when we create a new package, project, or index
 func (s GithubSourceControl) IsNameAvailable(repo string, org string) (bool, error) {
 	_, response, err := s.Client.Repositories.Get(s.context, org, repo)
@@ -35,14 +34,12 @@ func (s GithubSourceControl) IsNameAvailable(repo string, org string) (bool, err
 	}
 }
 
-// TODO create a new repo
 // we do this when we create a new package, project, or index
 func (s GithubSourceControl) CreateRepo(repo string, org string) error {
 	_, _, err := s.Client.Repositories.Create(s.context, org, &github.Repository{Name: &repo})
 	return err
 }
 
-// TODO create a release with a local file
 // we do this whenever we publish a package
 // Returns a list of URLs to the files which can go straight in the index source
 func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, filenames []string) ([]string, error) {
@@ -57,7 +54,8 @@ func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, 
 		files[i] = file
 	}
 
-	//First we create a release
+	// The github release model is that you create a release, then upload assets to it. So
+	// we create the release first...
 	release, _, err := s.Client.Repositories.CreateRelease(s.context, org, repo, &github.RepositoryRelease{
 		TagName: &tag,
 	})
@@ -66,7 +64,8 @@ func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, 
 	}
 	releaseId := release.GetID()
 	result := make([]string, len(filenames))
-	// Then we upload the files
+
+	//...then upload the assets
 	for _, file := range files {
 		uploadResponse, _, err := s.Client.Repositories.UploadReleaseAsset(s.context, org, repo, releaseId, &github.UploadOptions{
 			Name: file.Name(),
@@ -79,7 +78,7 @@ func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, 
 	return result, nil
 }
 
-// This is just for cleaning up after testing, really, but we need it
+// This is just for cleaning up after testing, really, but we need it for convenience
 func (s GithubSourceControl) DeleteRepo(repo string, org string) error {
 	_, err := s.Client.Repositories.Delete(s.context, org, repo)
 	return err
@@ -87,7 +86,6 @@ func (s GithubSourceControl) DeleteRepo(repo string, org string) error {
 
 // In case we need to forget that a release happened
 func (s GithubSourceControl) DeleteRelease(repo string, org string, tag string) error {
-	// First we need to get the release ID
 	release, _, err := s.Client.Repositories.GetReleaseByTag(s.context, org, repo, tag)
 	if err != nil {
 		return err
@@ -95,4 +93,8 @@ func (s GithubSourceControl) DeleteRelease(repo string, org string, tag string) 
 	releaseId := release.GetID()
 	_, err = s.Client.Repositories.DeleteRelease(s.context, org, repo, releaseId)
 	return err
+}
+
+func (s GithubSourceControl) GetRateLimitDelayMilliseconds() int {
+	return 500
 }

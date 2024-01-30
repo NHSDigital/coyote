@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 )
 
 func readInstalledPackages() ([]string, error) {
@@ -532,4 +533,88 @@ func PackageInit(context *Context, pkgname string) {
 
 func PackageBuild(context *Context, pkgname string, outdir string) {
 	context.PackageFiles.Build(pkgname, outdir)
+}
+
+// coyote package new <pkgname>
+// This creates a new package in the current directory, and pushes it
+// to github.
+// At some point we will undoubtedly want to have a template for this,
+// but for now we just create the files.
+func PackageNew(context *Context, pkgname string) error {
+	// First we make the new dir.  The name of the dir will match our
+	// remote.  We need to check that the name is available first.
+
+	sourceControl := context.SourceControl
+	intendedName := "cypkg-" + pkgname
+	packageOrg := context.Config.GetPackageOrg()
+	available, err := sourceControl.IsNameAvailable(intendedName, packageOrg)
+	if err != nil {
+		return fmt.Errorf("Error checking name availability: %v", err)
+	}
+	if !available {
+		return fmt.Errorf("Name %s is already taken.", intendedName)
+	}
+
+	actualName := intendedName
+
+	// Now we create the local dir, and initialise it as a git repo.
+	os.MkdirAll(actualName, 0777)
+	cwd := os.Getenv("PWD")
+	err = os.Chdir(actualName)
+	if err != nil {
+		return fmt.Errorf("Error changing to new directory: %v", err)
+	}
+	defer os.Chdir(cwd)
+
+	err = exec.Command("git", "init").Run()
+	if err != nil {
+		return fmt.Errorf("Error initialising git repo: %v", err)
+	}
+	// Force the main branch to be called main.
+	err = exec.Command("git", "branch", "-M", "main").Run()
+	if err != nil {
+		return fmt.Errorf("Error setting main branch: %v", err)
+	}
+	// Now we can run Init to create the package files.
+	context.PackageFiles.Init(pkgname)
+	// git add, git commit...
+	err = exec.Command("git", "add", ".").Run()
+	if err != nil {
+		return fmt.Errorf("Error adding files to git repo: %v", err)
+	}
+	err = exec.Command("git", "commit", "-m", "Initial commit").Run()
+	if err != nil {
+		return fmt.Errorf("Error committing files to git repo: %v", err)
+	}
+	// Now we can create the remote repo.
+	err = sourceControl.CreateRepo(actualName, packageOrg)
+	if err != nil {
+		return fmt.Errorf("Error creating remote repo: %v", err)
+	}
+	// We need to loop here until the remote repo is actually created, which
+	// we check by seeing if the name is available
+	for {
+		available, err = sourceControl.IsNameAvailable(actualName, packageOrg)
+		if err != nil {
+			return fmt.Errorf("Error checking name availability: %v", err)
+		}
+		if !available {
+			break
+		} else {
+			time.Sleep(time.Duration(sourceControl.GetRateLimitDelayMilliseconds()))
+		}
+	}
+
+	// We set the remote origin to the remote repo.
+	remoteUrl := "https://github.com/" + packageOrg + "/" + actualName + ".git"
+	err = exec.Command("git", "remote", "add", "origin", remoteUrl).Run()
+	if err != nil {
+		return fmt.Errorf("Error adding remote to git repo: %v", err)
+	}
+	// Now we can push the local repo to the remote.
+	err = exec.Command("git", "push", "-u", "origin", "HEAD").Run()
+	if err != nil {
+		return fmt.Errorf("Error pushing to remote repo: %v", err)
+	}
+	return nil
 }

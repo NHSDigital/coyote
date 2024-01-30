@@ -8,8 +8,9 @@ import (
 )
 
 type TomlConfig struct {
-	Index string `toml:"index"`
-	Path  string
+	Index      string `toml:"index"`
+	PackageOrg string `toml:"package_org"`
+	Path       string
 }
 
 func NewTomlConfig(path string) (*TomlConfig, error) {
@@ -42,6 +43,10 @@ func NewTomlConfig(path string) (*TomlConfig, error) {
 
 func (c *TomlConfig) GetIndex() string {
 	return c.Index
+}
+
+func (c *TomlConfig) GetPackageOrg() string {
+	return c.PackageOrg
 }
 
 func (c *TomlConfig) GetPath() string {

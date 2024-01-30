@@ -18,8 +18,11 @@ export INDEX=$(pwd)/index
 export INDEX_SRC=$(pwd)/index-src
 export COYOTE_CONFIG=$(pwd)/coyoterc # This sets it for subsequent coyote invocations
 
+# Note that the package org is set to NHSDigital, so this *will* upload packages if
+# you let it.
 cat > $COYOTE_CONFIG <<EOF
 index = "${INDEX}"
+package_org = "NHSDigital"
 EOF
 
 # Now we want a package

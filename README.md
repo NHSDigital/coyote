@@ -74,9 +74,9 @@ you want to build a version that is not the last in the sorted list.
 
 Create the `.cypkg/my-shiny-package` directory.
 
-TODO `coyote package new my-shiny-package`
+`coyote package new my-shiny-package`
 
-Do a `package init`, and push the empty package as a new github repo called `nhs-england-tools/cypkg-my-shiny-package`.
+Do a `package init`, and push the empty package as a new github repo called `NHSDigital/cypkg-my-shiny-package`.
 
 TODO `coyote package delete my-shiny-package`
 

@@ -24,6 +24,8 @@ func RunPackage(context *core.Context, args []string) {
 		core.PackageInit(context, pkgname)
 	case "build":
 		core.PackageBuild(context, pkgname, outdir)
+	case "new":
+		core.PackageNew(context, pkgname)
 	}
 }
 
@@ -140,9 +142,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Here we pre-parse the args to pull out any arguments that change the context
+	// In the first instance that's to allow us to insert a null source control
+	// adapter for testing purposes
+
+	var sourceControl core.IProvideSourceControl
+	for i, arg := range os.Args {
+		if arg == "--fake-github" {
+			sourceControl = core.NewNullSourceControl()
+			os.Args = append(os.Args[:i], os.Args[i+1:]...)
+			break
+		}
+	}
+	if sourceControl == nil {
+		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_AUTH_TOKEN"))
+	}
+
 	context := core.Context{
-		Config:       config,
-		PackageFiles: adapters.NewPackageTarFileProvider(),
+		Config:        config,
+		PackageFiles:  adapters.NewPackageTarFileProvider(),
+		SourceControl: sourceControl,
 	}
 
 	//copy os.Args to a new slice, because we don't want to pass the first
