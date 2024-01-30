@@ -72,7 +72,7 @@ you want to build a version that is not the last in the sorted list.
 
 `coyote package init my-shiny-package`
 
-Create the `.cypkg/my-shiny-package` directory.
+Create the `.cypkg/my-shiny-package` directory.  Call from the  root of your repository.
 
 `coyote package new my-shiny-package`
 

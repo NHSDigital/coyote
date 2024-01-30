@@ -3,9 +3,10 @@ package coyotecore
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net/url"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -247,13 +248,13 @@ func Init(context *Context, techStack string, projectName string, index string) 
 		os.Chdir(projectName)
 		defer os.Chdir("..")
 
-		return installPackageTree(context.PackageFiles, techStack, indexFile, false)
+		return installPackageTree(context.SourceControl, context.PackageFiles, techStack, indexFile, false)
 	} else {
 		return nil
 	}
 }
 
-func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
+func installPackageTree(sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
 
 	depQueue := []string{pkg}
@@ -330,7 +331,7 @@ func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile
 		}
 
 		if locationIsRemote(location) {
-			location, err = downloadFile(location)
+			location, err = sourceControl.DownloadReleaseFile(location)
 			if err != nil {
 				return fmt.Errorf("Error downloading package: %v\n", err)
 			}
@@ -354,7 +355,7 @@ func installPackageTree(packageFiles IProvidePackageFiles, pkg string, indexFile
 func Install(context *Context, pkgname string, index string, reinstall bool) error {
 	localIndex := index
 	if locationIsRemote(index) {
-		myLocalIndex, err := downloadFile(index)
+		myLocalIndex, err := context.SourceControl.DownloadReleaseFile(index)
 		localIndex = myLocalIndex
 		if err != nil {
 			return fmt.Errorf("Error downloading index file: %v\n", err)
@@ -367,7 +368,7 @@ func Install(context *Context, pkgname string, index string, reinstall bool) err
 		return fmt.Errorf("Error opening index file: %v\n", err)
 	}
 
-	return installPackageTree(context.PackageFiles, pkgname, indexFile, reinstall)
+	return installPackageTree(context.SourceControl, context.PackageFiles, pkgname, indexFile, reinstall)
 }
 
 type Package struct {
@@ -385,32 +386,6 @@ type Index struct {
 
 func locationIsRemote(location string) bool {
 	return strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://")
-}
-
-func downloadFile(location string) (string, error) {
-	// This function downloads a file from a remote location, and returns the local filename.
-	// It returns an error if the download fails.
-	// The file is downloaded to /tmp, and the filename is returned.
-	// Just use wget for now.
-	// The local filename is the same as the remote filename, but because we might have query strings or a fragment suffix in the url
-	// we need to strip them off.
-	urlWithoutFragment := strings.Split(location, "#")[0]
-	parsedUrl, err := url.Parse(urlWithoutFragment)
-	if err != nil {
-		return "", fmt.Errorf("Error parsing url %s: %v", location, err)
-	}
-	filename := parsedUrl.Path
-	basename := strings.Split(filename, "/")[len(strings.Split(filename, "/"))-1]
-	if basename == "" {
-		return "", fmt.Errorf("Error parsing filename from url %s", location)
-	}
-
-	cmd := exec.Command("wget", "-O", "/tmp/"+basename, location)
-	err = cmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("Error downloading file from %s: %v", location, err)
-	}
-	return "/tmp/" + basename, nil
 }
 
 func removeComments(body string) []string {
@@ -467,7 +442,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 
 		// packageLocation can be remote: http:// or https:// mean that we need to download the package.
 		if locationIsRemote(packageLocation) {
-			localLocation, err = downloadFile(packageLocation)
+			localLocation, err = context.SourceControl.DownloadReleaseFile(packageLocation)
 			if err != nil {
 				return fmt.Errorf("Error downloading package %s: %v\n", packageLocation, err)
 			}
@@ -483,7 +458,15 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 			}
 			localLocation = packageLocation
 		}
+		if _, err := os.Stat(localLocation); errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("Package file missing: %s", localLocation)
+		}
 		pkg := readIndexEntry(context.PackageFiles, localLocation)
+		if pkg.Name == "" {
+			// This is a proper "this should never happen" - if we can't get the name of the package
+			// then something has gone wrong upstream.
+			panic(fmt.Sprintf("Package name in %s is empty.", localLocation))
+		}
 		pkg.Location = packageLocation
 		packages[pkg.Name] = pkg
 	}
@@ -531,8 +514,8 @@ func PackageInit(context *Context, pkgname string) {
 	context.PackageFiles.Init(pkgname)
 }
 
-func PackageBuild(context *Context, pkgname string, outdir string) {
-	context.PackageFiles.Build(pkgname, outdir)
+func PackageBuild(context *Context, pkgname string, outdir string, version string) (string, error) {
+	return context.PackageFiles.Build(pkgname, outdir, version)
 }
 
 // coyote package new <pkgname>
@@ -636,15 +619,21 @@ func PackageDelete(context *Context, pkgname string) error {
 	return nil
 }
 
+func repoHasOriginSet(origin string) (bool, error) {
+	remotes, err := exec.Command("git", "remote").Output()
+	if err != nil {
+		return false, fmt.Errorf("Error getting remote list: %v", err)
+	}
+	return strings.Contains(string(remotes)+"\n", origin), nil
+}
+
 func Open(context *Context) error {
 	// If we're in a github repo, open the origin remote repo in the browser.
 	remoteToOpen := "origin"
-	remotes, err := exec.Command("git", "remote").Output()
+	remoteExists, err := repoHasOriginSet(remoteToOpen)
 	if err != nil {
-		return fmt.Errorf("Error getting remote list: %v", err)
-	}
-
-	if !strings.Contains(string(remotes)+"\n", remoteToOpen) {
+		return fmt.Errorf("Error checking for remote: %v", err)
+	} else if !remoteExists {
 		return fmt.Errorf("No %s remote found.", remoteToOpen)
 	}
 
@@ -655,4 +644,118 @@ func Open(context *Context) error {
 
 	platform := context.Platform
 	return platform.OpenURL(strings.TrimSpace(string(remote)))
+}
+
+func PackageRelease(context *Context, pkgname string, version string) (string, error) {
+	// Bad things will happen if we get version=="HEAD" here, so don't do that
+	if version == "HEAD" {
+		return "", fmt.Errorf("Cannot release HEAD version.")
+	}
+
+	// First we need the version string as a tag
+	tag := "coyote-" + version
+
+	//Barf if we're not in a coyote package
+	if _, err := os.Stat(".cypkg"); os.IsNotExist(err) {
+		return "", fmt.Errorf("Not in a Coyote package.\n")
+	}
+
+	//Barf if we're not in a git repo
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		return "", fmt.Errorf("Not in a git repo.\n")
+	}
+
+	//Barf if we don't have an origin remote set
+	remoteToOpen := "origin"
+	remoteExists, err := repoHasOriginSet(remoteToOpen)
+	if err != nil {
+		return "", fmt.Errorf("Error checking for remote: %v", err)
+	} else if !remoteExists {
+		return "", fmt.Errorf("No %s remote found.", remoteToOpen)
+	}
+
+	//Barf if the version is not a valid git tag
+	err = exec.Command("git", "check-ref-format", "--allow-onelevel", tag).Run()
+	if err != nil {
+		return "", fmt.Errorf("Invalid version: %v\n", err)
+	}
+
+	// Barf if the version already exists as a release on github
+	sourceControl := context.SourceControl
+	packageOrg := context.Config.GetPackageOrg()
+
+	releaseExists, err := sourceControl.DoesReleaseExist(pkgname, packageOrg, version)
+	if err != nil {
+		return "", fmt.Errorf("Error checking if release exists: %v\n", err)
+	}
+	if releaseExists {
+		return "", fmt.Errorf("Release %s already exists.\n", version)
+	}
+
+	// Now we check whether the version already exists as a git tag.
+	output, err := exec.Command("git", "tag", "--list", tag).Output()
+	if err != nil {
+		return "", fmt.Errorf("Error checking for existing tag: %v\n", err)
+	}
+	if strings.TrimSpace(string(output)) != tag {
+		// We use an annotated tag here so that we keep authorship
+		// TODO: check whether tag signing can work here
+		// TODO: what can usefully go in the tag message?
+		cmd := exec.Command("git", "tag", "--annotate", "-m", "No tag message", tag)
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating tag %v:\n%v\n", tag, output)
+			return "", fmt.Errorf("Error creating tag %v: %v\n", tag, err)
+		}
+	}
+
+	// We know the tag exists in the repo, so we can build the tag.
+
+	packagePath, err := context.PackageFiles.Build(pkgname, ".", version)
+	if err != nil {
+		return "", fmt.Errorf("Error building package: %v\n", err)
+	}
+	// TODO this is potentially hazardous, because it pushes all tags and ignores whether
+	// what's checked out matches the version we're pushing.  Ok for a demo though.
+	err = exec.Command("git", "push", "origin", "--follow-tags").Run()
+	if err != nil {
+		return "", fmt.Errorf("Error pushing tag to remote: %v\n", err)
+	}
+	assetURLs, err := sourceControl.CreateRelease("cypkg-"+pkgname, packageOrg, tag, []string{packagePath})
+	if err != nil {
+		return "", fmt.Errorf("Error creating release: %v\n", err)
+	}
+
+	return assetURLs[0], nil
+}
+
+func PackageTest(context *Context, pkgname string) error {
+	//All this test does is make a temp dir, build the package into it, and then apply it.
+	// It will barf if there are any errors in the templates.
+	tempdir, err := os.MkdirTemp("", "coyote-test")
+	if err != nil {
+		return fmt.Errorf("Error creating temp dir: %v\n", err)
+	}
+	defer os.RemoveAll(tempdir)
+
+	packagePath, err := context.PackageFiles.Build(pkgname, tempdir, "HEAD")
+	if err != nil {
+		return fmt.Errorf("Error building package: %v\n", err)
+	}
+
+	// Now we apply the package to the temp dir.
+	// We need to change to the temp dir first, and then change back.
+	cwd := os.Getenv("PWD")
+	err = os.Chdir(tempdir)
+	if err != nil {
+		return fmt.Errorf("Error changing to temp dir: %v\n", err)
+	}
+	defer os.Chdir(cwd)
+	// Make ourselves a coyote project dir
+	os.MkdirAll(".coyote", 0777)
+	os.WriteFile(".coyote/project-name", []byte("test"), 0777)
+	// Now we can apply the package.
+	// NOTE: THIS WILL RUN on-install IF IT EXISTS.
+	Apply(context, packagePath)
+	return nil
 }

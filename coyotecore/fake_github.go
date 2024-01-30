@@ -54,3 +54,13 @@ func (s *NullSourceControl) DeleteRelease(repo string, org string, tag string) e
 func (s *NullSourceControl) GetRateLimitDelayMilliseconds() int {
 	return 0
 }
+
+func (s *NullSourceControl) DoesReleaseExist(repo string, org string, tag string) (bool, error) {
+	fmt.Println("NullSourceControl called: NullSourceControl.DoesReleaseExist(", repo, ",", org, ",", tag, ")")
+	return false, nil
+}
+
+func (s *NullSourceControl) DownloadReleaseFile(href string) (string, error) {
+	fmt.Println("NullSourceControl called: NullSourceControl.DownloadReleaseFile(", href, ")")
+	return "", nil
+}

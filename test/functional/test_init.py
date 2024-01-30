@@ -23,6 +23,7 @@ def test_init_from_package():
         #  cd my-new-project
         #  coyote install my-chosen-tech-stack --index ../index.cyi
         coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
+        print(list(ctx.path('my-new-project').glob('**/*')))
         assert(Path('my-new-project', 'canary').is_file())
 
 def test_init_fails_if_project_already_exists():

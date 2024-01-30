@@ -8,6 +8,16 @@ import (
 	core "nhs.uk/coyotecore"
 )
 
+func RunRelease(context *core.Context, pkgname string, version string) {
+
+	assetURL, err := core.PackageRelease(context, pkgname, version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error releasing package: %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(assetURL)
+}
+
 func RunPackage(context *core.Context, args []string) {
 	subcmd := args[0]
 	pkgname := args[1]
@@ -16,6 +26,7 @@ func RunPackage(context *core.Context, args []string) {
 	for i, arg := range args {
 		if arg == "--output" {
 			outdir = args[i+1]
+			args = append(args[:i], args[i+2:]...)
 		}
 	}
 
@@ -23,13 +34,34 @@ func RunPackage(context *core.Context, args []string) {
 	case "init":
 		core.PackageInit(context, pkgname)
 	case "build":
-		core.PackageBuild(context, pkgname, outdir)
+		// By default we build the latest version
+		version := ""
+		if len(args) > 2 {
+			version = args[2]
+		}
+		RunPackageBuild(context, pkgname, outdir, version)
 	case "new":
 		core.PackageNew(context, pkgname)
 	case "delete":
 		core.PackageDelete(context, pkgname)
-
+	case "release":
+		version := args[2] // not optional here
+		RunRelease(context, pkgname, version)
+	case "test":
+		core.PackageTest(context, pkgname)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: package %s\n", subcmd)
+		os.Exit(1)
 	}
+}
+
+func RunPackageBuild(context *core.Context, pkgname string, outdir string, version string) {
+	filename, err := core.PackageBuild(context, pkgname, outdir, version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error building package: %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(filename)
 }
 
 func RunApply(context *core.Context, args []string) {

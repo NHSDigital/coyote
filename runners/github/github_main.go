@@ -102,6 +102,16 @@ func up(repo string, org string, sourceControl core.IProvideSourceControl) {
 		fmt.Fprintf(os.Stderr, "Error creating release: %s\n", err)
 		os.Exit(1)
 	}
+
+	releaseExists, err := sourceControl.DoesReleaseExist(repo, org, "v0.0.1")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking if release exists: %s\n", err)
+		os.Exit(1)
+	}
+	if !releaseExists {
+		fmt.Fprintf(os.Stderr, "Release does not exist\n")
+		os.Exit(1)
+	}
 	fmt.Println(assetURLs)
 }
 
@@ -112,6 +122,16 @@ func down(repo string, org string, sourceControl core.IProvideSourceControl) {
 		fmt.Fprintf(os.Stderr, "Error deleting release: %s\n", err)
 		os.Exit(1)
 	}
+	releaseStillExists, err := sourceControl.DoesReleaseExist(repo, org, "v0.0.1")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking if release exists: %s\n", err)
+		os.Exit(1)
+	}
+	if releaseStillExists {
+		fmt.Fprintf(os.Stderr, "Release still exists\n")
+		os.Exit(1)
+	}
+
 	// Delete the repo
 	err = sourceControl.DeleteRepo(repo, org)
 	if err != nil {

@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 import tempfile
 import subprocess
 
@@ -31,6 +32,7 @@ def coyote(*args, config="", env=os.environ):
     """Run the coyote command, returning the result."""
     result = unchecked_coyote(*args, config=config, env=env)
     if result.returncode != 0:
+        sys.stderr.write(result.stderr.decode('utf-8', 'ignore'))
         raise Exception(result.stderr.decode('utf-8', 'ignore'))
     return result
 
@@ -91,16 +93,16 @@ class PackageTemplate:
         self.need_commit = False
         return self
 
-    def build(self, workdir, pkg):
+    def build(self, workdir, pkg, version=None):
         with NewDirContext(workdir / self.repo_root_name):
             create_package(pkg)
-            if not self.is_version_set:
-                self.version('1.42.0')
             if self.need_commit:
                 self.commit()
+            if not self.is_version_set:
+                self.version('v1.42.0')
             for op in self.ops:
                 if op[0] == 'set_version':
-                    git('tag', 'coyote-v' + op[1])
+                    git('tag', '--annotate', '-m', "No tag message", 'coyote-' + op[1])
                 elif op[0] == 'add_file':
                     target = Path(op[1])
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +111,7 @@ class PackageTemplate:
                         target.chmod(target.stat().st_mode | 0o111)
                     git('add', op[1])
                 elif op[0] == 'add_symlink':
+                    print("Adding symlink " + op[1])
                     target = Path(op[1])
                     target.parent.mkdir(parents=True, exist_ok=True)
                     os.symlink(op[2], op[1])
@@ -123,7 +126,9 @@ class PackageTemplate:
                 elif op[0] == 'commit':
                     git('add', '.')
                     git('commit', '-m', op[1])
-            package_name = coyote('package', 'build', pkg).stdout.decode('utf-8').strip()
+            args = ['package', 'build', pkg]
+            if version is not None: args.append(version)
+            package_name = coyote(*args).stdout.decode('utf-8').strip()
             os.rename(package_name, workdir / package_name)
             return workdir / package_name
 

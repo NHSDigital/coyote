@@ -70,8 +70,8 @@ func (p PackageTarFile) ReadMetadata(field string) string {
 	}
 }
 
-func templateString(contents string, vars core.PackageTemplateVars) string {
-	tmpl := template.Must(template.New("file").Parse(contents))
+func templateString(contents string, vars core.PackageTemplateVars, label string) string {
+	tmpl := template.Must(template.New(label).Parse(contents))
 	var templated bytes.Buffer
 	err := tmpl.Execute(&templated, vars)
 	if err != nil {
@@ -95,6 +95,11 @@ func (p PackageTarFileProvider) Init(pkgname string) {
 	PackageInit(pkgname)
 }
 
+// This function defines the versioning scheme for coyote packages.
+// Any git tag that starts with "coyote-" is considered a coyote package version.
+// Versions are sorted alphabetically. No other format is imposed.
+// TODO: Is this actually a good idea? I find in trying out coyote that I want
+// to specify any old git ref as a version, not just tags.
 func versionFromTags() string {
 	cmd := exec.Command("git", "tag", "--list", "coyote-*")
 	output, err := cmd.Output()
@@ -111,20 +116,37 @@ func versionFromTags() string {
 	return version
 }
 
-func PackageBuild(pkgname string, outdir string) {
-	version := versionFromTags()
-	filename := pkgname + "-" + version + ".cypkg"
+func tagFromVersion(version string) string {
+	return "coyote-" + strings.TrimSpace(version)
+}
 
+func PackageBuild(pkgname string, outdir string, version string) (string, error) {
 	tempDir, err := os.MkdirTemp("", "coyote")
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("Error creating temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	err = exec.Command("git", "clone", ".", tempDir).Run()
-	if err != nil {
-		panic(err)
+	var cmd *exec.Cmd
+	// We support the magic version "HEAD" which means the latest commit, and is only useful for testing
+	// This is the only way to build a package from a commit that isn't tagged
+	if version == "HEAD" {
+		cmd = exec.Command("git", "clone", ".", tempDir)
+	} else {
+		// If no version is specified, we build the latest version that's been tagged
+		if version == "" {
+			version = versionFromTags()
+		}
+		rev := tagFromVersion(version)
+		cmd = exec.Command("git", "clone", "--branch", rev, ".", tempDir)
 	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, string(output))
+		return "", fmt.Errorf("Error cloning %v: %v", version, err)
+	}
+
 	os.RemoveAll(tempDir + "/.git")
 	os.RemoveAll(tempDir + "/.cypkg")
 
@@ -136,36 +158,39 @@ func PackageBuild(pkgname string, outdir string) {
 	CopyFileIfExist(".cypkg/"+pkgname+"/on-install", tempDir+"/.CYMETA/on-install")
 
 	os.Mkdir(".cypkg/tmp", 0777)
+
+	filename := pkgname + "-" + version + ".cypkg"
 	exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".").Run()
 
 	if _, err := os.Stat(outdir); os.IsNotExist(err) {
 		os.MkdirAll(outdir, 0777)
 	} else if err != nil {
-		panic(err)
+		return "", fmt.Errorf("Error making the output dir: %v", err)
 	}
+
 	outfile := outdir + "/" + filename
 
 	err = os.Rename(".cypkg/tmp/"+filename, outfile)
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("Error moving the output file: %v", err)
 	}
 
-	fmt.Println(outfile)
+	return outfile, nil
 }
 
-func (p PackageTarFileProvider) Build(pkgname string, outdir string) {
-	PackageBuild(pkgname, outdir)
+func (p PackageTarFileProvider) Build(pkgname string, outdir string, version string) (string, error) {
+	return PackageBuild(pkgname, outdir, version)
 }
 
 func extractFile(header *tar.Header, vars core.PackageTemplateVars, file *tar.Reader) {
-	templatedFilename := templateString(header.Name, vars)
+	templatedFilename := templateString(header.Name, vars, "Filename "+header.Name)
 	mode := header.FileInfo().Mode()
 
 	if header.Typeflag == tar.TypeDir {
 		os.MkdirAll(templatedFilename, mode)
 	} else if header.Typeflag == tar.TypeSymlink {
 		target := header.Linkname
-		templatedTarget := templateString(target, vars)
+		templatedTarget := templateString(target, vars, "Symlink "+header.Name+" -> "+target)
 
 		os.Symlink(templatedTarget, templatedFilename)
 	} else {
@@ -173,7 +198,9 @@ func extractFile(header *tar.Header, vars core.PackageTemplateVars, file *tar.Re
 		if err != nil {
 			panic(err)
 		}
-		templatedContents := templateString(string(contents), vars)
+		// TODO: we shouldn't template binary files, but I don't have a good answer for
+		// how we should demarcate them yet
+		templatedContents := templateString(string(contents), vars, "Contents "+header.Name)
 
 		os.WriteFile(templatedFilename, []byte(templatedContents), mode)
 	}

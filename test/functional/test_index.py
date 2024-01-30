@@ -81,3 +81,13 @@ def test_index_location_relative_to_index_file():
         coyote('index', 'build', index_source_path, target_path)
         index = json.loads(target_path.read_text())
         assert(index['packages']['my-chosen-tech-stack']['location'] == str(package_path.absolute()))
+
+# TODO test that we get an error if the index lists a file that doesn't exist
+def test_error_if_file_doesnt_exist():
+    with CoyoteTestContext() as ctx:
+        index_source_path = ctx.path()/"index-source"
+        index_source_path.write_text("doesnt-exist")
+        target_path = ctx.path()/"index.cyi"
+
+        cmd = unchecked_coyote('index', 'build', index_source_path, target_path)
+        assert("Package file missing: " in cmd.stderr.decode('utf-8'))

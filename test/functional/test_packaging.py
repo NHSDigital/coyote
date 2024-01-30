@@ -134,3 +134,44 @@ def test_set_build_output_directory():
             package_name = result.stdout.decode('utf-8').strip()
 
             assert((outdir / package_name).is_file())
+
+def test_package_template_works():
+    with CoyoteTestContext() as ctx:
+        template = PackageTemplate('test-package-root')
+        package_path = template \
+            .add_file('canary', 'This is a test package') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+
+        assert os.path.isfile(ctx.path() / 'test-package-root' / 'canary')
+        assert os.path.isfile(package_path)
+
+def test_build_prior_version():
+    with CoyoteTestContext() as ctx:
+        template = PackageTemplate('test-package-root')
+        package_path = template \
+            .add_file('canary', 'This is a prior version') \
+            .commit() \
+            .version('v1.43.0') \
+            .add_file('budgie', 'This is a later version') \
+            .commit() \
+            .version('v1.44.0') \
+            .build(ctx.path(), 'my-chosen-tech-stack', version='v1.43.0')
+
+        # Now we check that when we unpack the package, we get the prior version
+        with NewDirContext(ctx.path() / 'extract'):
+            assert(unpack(package_path).returncode == 0)
+            assert(Path('canary').is_file())
+            assert(not Path('budgie').is_file())
+
+def test_build_head():
+    with CoyoteTestContext() as ctx:
+        template = PackageTemplate('test-package-root')
+        package_path = template \
+            .add_file('canary', "This is a test file that isn't in a version-tagged commit") \
+            .commit() \
+            .build(ctx.path(), 'my-chosen-tech-stack', version='HEAD')
+
+        # Now we check that when we unpack the package, we get the file that's in the prior version
+        with NewDirContext(ctx.path() / 'extract'):
+            assert(unpack(package_path).returncode == 0)
+            assert(Path('canary').is_file())

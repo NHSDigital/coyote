@@ -2,7 +2,12 @@ package coyoteadapters
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
+	"os/exec"
+	"path"
+	"strings"
 
 	github "github.com/google/go-github/v58/github"
 )
@@ -68,7 +73,7 @@ func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, 
 	//...then upload the assets
 	for _, file := range files {
 		uploadResponse, _, err := s.Client.Repositories.UploadReleaseAsset(s.context, org, repo, releaseId, &github.UploadOptions{
-			Name: file.Name(),
+			Name: path.Base(file.Name()),
 		}, file)
 		if err != nil {
 			return nil, err
@@ -97,4 +102,45 @@ func (s GithubSourceControl) DeleteRelease(repo string, org string, tag string) 
 
 func (s GithubSourceControl) GetRateLimitDelayMilliseconds() int {
 	return 500
+}
+
+func (s GithubSourceControl) DoesReleaseExist(repo string, org string, tag string) (bool, error) {
+	_, response, err := s.Client.Repositories.GetReleaseByTag(s.context, org, repo, tag)
+
+	if response.StatusCode == 404 {
+		return false, nil
+	} else if response.StatusCode == 200 {
+		return true, nil
+	} else {
+		return false, err
+	}
+}
+
+func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
+	// This function downloads a file from a remote location, and returns the local filename.
+	// It returns an error if the download fails.
+	// The file is downloaded to /tmp, and the filename is returned.
+	// Just use wget for now.
+	// The local filename is the same as the remote filename, but because we might have query strings or a fragment suffix in the url
+	// we need to strip them off.
+	// Note: the auth isn't covered by tests
+	hrefWithoutFragment := strings.Split(href, "#")[0]
+	parsedUrl, err := url.Parse(hrefWithoutFragment)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing url %s: %v", href, err)
+	}
+	filename := parsedUrl.Path
+	basename := strings.Split(filename, "/")[len(strings.Split(filename, "/"))-1]
+	if basename == "" {
+		return "", fmt.Errorf("Error parsing filename from url %s", href)
+	}
+
+	targetFilename := "/tmp/" + basename
+	// TODO: we don't need wget for this, we can just use the http client
+	cmd := exec.Command("wget", "--header", "Authorization: token "+s.authToken, "-O", targetFilename, href)
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("Error downloading file from %s: %v", href, err)
+	}
+	return targetFilename, nil
 }

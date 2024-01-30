@@ -32,7 +32,7 @@ type PackageFile interface {
 
 type IProvidePackageFiles interface {
 	Init(pkgname string)
-	Build(pkgname string, outdir string)
+	Build(pkgname string, outdir string, version string) (string, error)
 	Open(location string) PackageFile
 }
 
@@ -43,7 +43,10 @@ type IProvideSourceControl interface {
 	CreateRelease(repo string, org string, tag string, filenames []string) ([]string, error)
 	DeleteRelease(repo string, org string, tag string) error
 	GetRateLimitDelayMilliseconds() int
+	DoesReleaseExist(repo string, org string, tag string) (bool, error)
+	DownloadReleaseFile(href string) (string, error)
 }
+
 type Context struct {
 	Config        Config
 	PackageFiles  IProvidePackageFiles
