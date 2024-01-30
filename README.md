@@ -96,14 +96,13 @@ zipped.
 The file will be written to the current directory as
 `my-shiny-package_<version>.cypkg`.
 
-TODO `coyote package publish`
+TODO `coyote package release [version] [package...]`
 
-Just a git push, but won't do it unless HEAD has a coyote version tag.
-
-TODO `coyote package release [filename]`
-
-Pushes `filename`, defaulting to `my-shiny-package_<version>.cypkg`, as a
-release to the source repository, identified as the git `origin` remote.
+Sanity checks the version, does a `coyote package build`, tags the repo if it's not
+already tagged at that version and that commit is currently checked out,
+pushes the tag (and if necessary any local patches).
+Pushes each `<package>_<version>.cypkg` as release to the source repository,
+identified as the git `origin` remote.
 
 `coyote install <package>`
 
