@@ -618,3 +618,41 @@ func PackageNew(context *Context, pkgname string) error {
 	}
 	return nil
 }
+
+func PackageDelete(context *Context, pkgname string) error {
+	// This function deletes the named package from github.
+	// It does not delete the local copy of the package.
+	// It does not check that the package is not in use.
+	// It does not check that the package is not a dependency of another package.
+	// It does not check that the package is not a dependency of the project.
+	// It will make you sad if you use it wrong.
+
+	sourceControl := context.SourceControl
+	packageOrg := context.Config.GetPackageOrg()
+	err := sourceControl.DeleteRepo("cypkg-"+pkgname, packageOrg)
+	if err != nil {
+		return fmt.Errorf("Error deleting remote repo: %v", err)
+	}
+	return nil
+}
+
+func Open(context *Context) error {
+	// If we're in a github repo, open the origin remote repo in the browser.
+	remoteToOpen := "origin"
+	remotes, err := exec.Command("git", "remote").Output()
+	if err != nil {
+		return fmt.Errorf("Error getting remote list: %v", err)
+	}
+
+	if !strings.Contains(string(remotes)+"\n", remoteToOpen) {
+		return fmt.Errorf("No %s remote found.", remoteToOpen)
+	}
+
+	remote, err := exec.Command("git", "remote", "get-url", remoteToOpen).Output()
+	if err != nil {
+		return fmt.Errorf("Error getting remote url: %v", err)
+	}
+
+	platform := context.Platform
+	return platform.OpenURL(strings.TrimSpace(string(remote)))
+}

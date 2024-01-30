@@ -78,13 +78,14 @@ Create the `.cypkg/my-shiny-package` directory.
 
 Do a `package init`, and push the empty package as a new github repo called `NHSDigital/cypkg-my-shiny-package`.
 
-TODO `coyote package delete my-shiny-package`
+`coyote package delete my-shiny-package`
 
 Delete the github repo `nhs-england-tools/cypkg-my-shiny-package`.
 
-TODO `coyote package repo open`
+`coyote open`
 
-Open the browser at `https://github.com/nhs-england-tools/cypkg-my-shiny-package`.
+Open the browser at `https://github.com/nhs-england-tools/cypkg-my-shiny-package`, or whatever the current origin
+remote is set to.
 
 `coyote package build my-shiny-package`
 

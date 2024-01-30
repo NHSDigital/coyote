@@ -48,8 +48,13 @@ type Context struct {
 	Config        Config
 	PackageFiles  IProvidePackageFiles
 	SourceControl IProvideSourceControl
+	Platform      Platform
 }
 
 type PackageTemplateVars struct {
 	ProjectName string
+}
+
+type Platform interface {
+	OpenURL(url string) error
 }

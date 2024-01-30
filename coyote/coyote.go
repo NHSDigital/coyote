@@ -26,6 +26,9 @@ func RunPackage(context *core.Context, args []string) {
 		core.PackageBuild(context, pkgname, outdir)
 	case "new":
 		core.PackageNew(context, pkgname)
+	case "delete":
+		core.PackageDelete(context, pkgname)
+
 	}
 }
 
@@ -112,6 +115,14 @@ func getConfig(args []string) (core.Config, error) {
 	return adapters.NewTomlConfig(configPath)
 }
 
+func RunOpen(context *core.Context) {
+	err := core.Open(context)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening repo: %s\n", err)
+		os.Exit(1)
+	}
+}
+
 func Run(context *core.Context, args []string) {
 	cmd := args[0]
 	switch cmd {
@@ -127,6 +138,8 @@ func Run(context *core.Context, args []string) {
 		RunInstall(context, args[1:])
 	case "config":
 		RunConfig(context, args[1:])
+	case "open":
+		RunOpen(context)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
 		os.Exit(1)
@@ -162,6 +175,7 @@ func main() {
 		Config:        config,
 		PackageFiles:  adapters.NewPackageTarFileProvider(),
 		SourceControl: sourceControl,
+		Platform:      adapters.NewPlatform(),
 	}
 
 	//copy os.Args to a new slice, because we don't want to pass the first
