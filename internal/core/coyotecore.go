@@ -1,4 +1,4 @@
-package coyotecore
+package core
 
 import (
 	"bufio"
@@ -116,7 +116,7 @@ func runOnInstall(pkg PackageFile) error {
 	return nil
 }
 
-func Apply(context *Context, filename string) {
+func Apply(context *Context, filename string) error {
 	checkForCoyoteProject()
 	pkg := context.PackageFiles.Open(filename)
 	conflicts := conflictingInstalledPackages(pkg)
@@ -125,12 +125,12 @@ func Apply(context *Context, filename string) {
 		err := runOnInstall(pkg)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error running on-install script: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Error running on-install script: %v\n", err)
+		} else {
+			return nil
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "Conflicts found: %s\n", strings.Join(conflicts, ", "))
-		os.Exit(1)
+		return fmt.Errorf("Conflicts found: %s\n", strings.Join(conflicts, ", "))
 	}
 }
 
@@ -225,7 +225,7 @@ func stringInSlice(str string, slice []string) bool {
 	return false
 }
 
-func Init(context *Context, techStack string, projectName string, index string) error {
+func Init(context *Context, techStack string, projectName string) error {
 	// This function creates a new Coyote project, named projectName.
 	// The project will be created in the current directory.
 	// The name will be stored in .coyote/project-name.
@@ -239,7 +239,7 @@ func Init(context *Context, techStack string, projectName string, index string) 
 
 	if techStack != "empty" {
 
-		indexFile, err := openIndexFile(index)
+		indexFile, err := openIndexFile(context.Config.GetIndex())
 		if err != nil {
 			return fmt.Errorf("Error opening index file: %v\n", err)
 		}
@@ -352,7 +352,8 @@ func installPackageTree(sourceControl IProvideSourceControl, packageFiles IProvi
 	return nil
 }
 
-func Install(context *Context, pkgname string, index string, reinstall bool) error {
+func Install(context *Context, pkgname string, reinstall bool) error {
+	index := context.Config.GetIndex()
 	localIndex := index
 	if locationIsRemote(index) {
 		myLocalIndex, err := context.SourceControl.DownloadReleaseFile(index)
@@ -510,8 +511,8 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 	return nil
 }
 
-func PackageInit(context *Context, pkgname string) {
-	context.PackageFiles.Init(pkgname)
+func PackageInit(context *Context, pkgname string) error {
+	return context.PackageFiles.Init(pkgname)
 }
 
 func PackageBuild(context *Context, pkgname string, outdir string, version string) (string, error) {
@@ -588,18 +589,7 @@ func PackageNew(context *Context, pkgname string) error {
 		}
 	}
 
-	// We set the remote origin to the remote repo.
-	remoteUrl := "https://github.com/" + packageOrg + "/" + actualName + ".git"
-	err = exec.Command("git", "remote", "add", "origin", remoteUrl).Run()
-	if err != nil {
-		return fmt.Errorf("Error adding remote to git repo: %v", err)
-	}
-	// Now we can push the local repo to the remote.
-	err = exec.Command("git", "push", "-u", "origin", "HEAD").Run()
-	if err != nil {
-		return fmt.Errorf("Error pushing to remote repo: %v", err)
-	}
-	return nil
+	return context.SourceControl.Push(actualName, packageOrg)
 }
 
 func PackageDelete(context *Context, pkgname string) error {
@@ -756,6 +746,5 @@ func PackageTest(context *Context, pkgname string) error {
 	os.WriteFile(".coyote/project-name", []byte("test"), 0777)
 	// Now we can apply the package.
 	// NOTE: THIS WILL RUN on-install IF IT EXISTS.
-	Apply(context, packagePath)
-	return nil
+	return Apply(context, packagePath)
 }

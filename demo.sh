@@ -6,6 +6,7 @@
 
 set -e
 set -u
+set -x
 
 export PATH=$(pwd)/build/bin:$PATH
 

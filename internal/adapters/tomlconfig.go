@@ -1,4 +1,4 @@
-package coyoteadapters
+package adapters
 
 import (
 	"fmt"

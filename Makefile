@@ -19,13 +19,12 @@ deps: test/functional/.venv/deps-installed venv
 
 .PHONY: test
 test: deps
-	(cd coyoteadapters && go test)
-	(cd coyotecore && go test)
+	go test
 	test/functional/.venv/bin/pytest -v test/functional
 
-build/bin/coyote: $(shell find coyote* -type f -name '*.go')
+build/bin/coyote: $(shell find . -type f -name '*.go')
 	mkdir -p build/bin
-	cd coyote && go build -o ../build/bin/coyote .
+	go build -o build/bin/coyote ./cmd/coyote/main.go
 
 .PHONY: exe
 exe: build/bin/coyote

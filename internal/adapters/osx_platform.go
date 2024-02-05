@@ -1,9 +1,9 @@
-package coyoteadapters
+package adapters
 
 import (
 	"os/exec"
 
-	core "nhs.uk/coyotecore"
+	core "github.com/nhsdigital/coyote/internal/core"
 )
 
 type OSXPlatform struct{}

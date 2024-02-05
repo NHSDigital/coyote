@@ -1,4 +1,4 @@
-package coyotecore
+package core
 
 type Config interface {
 	// The index key is the path or URL to the index file.
@@ -31,7 +31,7 @@ type PackageFile interface {
 }
 
 type IProvidePackageFiles interface {
-	Init(pkgname string)
+	Init(pkgname string) error
 	Build(pkgname string, outdir string, version string) (string, error)
 	Open(location string) PackageFile
 }
@@ -45,6 +45,7 @@ type IProvideSourceControl interface {
 	GetRateLimitDelayMilliseconds() int
 	DoesReleaseExist(repo string, org string, tag string) (bool, error)
 	DownloadReleaseFile(href string) (string, error)
+	Push(repo string, org string) error
 }
 
 type Context struct {

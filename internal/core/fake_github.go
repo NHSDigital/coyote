@@ -1,4 +1,4 @@
-package coyotecore
+package core
 
 import "fmt"
 
@@ -63,4 +63,9 @@ func (s *NullSourceControl) DoesReleaseExist(repo string, org string, tag string
 func (s *NullSourceControl) DownloadReleaseFile(href string) (string, error) {
 	fmt.Println("NullSourceControl called: NullSourceControl.DownloadReleaseFile(", href, ")")
 	return "", nil
+}
+
+func (s *NullSourceControl) Push(repo string, org string) error {
+	fmt.Println("NullSourceControl called: NullSourceControl.Push(", repo, ",", org, ")")
+	return nil
 }

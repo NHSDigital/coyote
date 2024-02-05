@@ -1,4 +1,4 @@
-package coyotecore
+package core
 
 import (
 	"fmt"

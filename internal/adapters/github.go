@@ -1,4 +1,4 @@
-package coyoteadapters
+package adapters
 
 import (
 	"context"
@@ -143,4 +143,17 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 		return "", fmt.Errorf("Error downloading file from %s: %v", href, err)
 	}
 	return targetFilename, nil
+}
+
+func (s GithubSourceControl) Push(repo string, org string) error {
+	// This function pushes the current directory to the remote repository.
+	// It returns an error if the push fails.
+	// Just use git for now.
+	repoUrl := "https://github.com/" + org + "/" + repo + ".git"
+	cmd := exec.Command("git", "push", repoUrl, "HEAD")
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Error pushing to remote repository: %v", err)
+	}
+	return nil
 }

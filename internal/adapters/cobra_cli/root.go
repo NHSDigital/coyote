@@ -1,13 +1,86 @@
-package main
+package cobra_cli
 
 import (
 	"fmt"
 	"os"
 
-	adapters "nhs.uk/coyoteadapters"
-	core "nhs.uk/coyotecore"
+	adapters "github.com/nhsdigital/coyote/internal/adapters"
+	core "github.com/nhsdigital/coyote/internal/core"
+	"github.com/spf13/cobra"
 )
 
+var ConfigPath string
+var UseFakeGithub bool
+var overrideIndexPath string
+
+var Context core.Context
+
+var rootCmd = &cobra.Command{
+	Use:   "coyote [flags] [command]",
+	Short: "Package management for repositories",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.Usage()
+		return nil
+	},
+}
+
+func Execute() {
+	cobra.OnInitialize(initContext)
+
+	rootCmd.PersistentFlags().StringVarP(&ConfigPath, "config", "c", "", "Path to the .coyoterc config file")
+	rootCmd.PersistentFlags().BoolVar(&UseFakeGithub, "fake-github", false, "If set, will not communicate with the real Github.")
+	rootCmd.PersistentFlags().StringVarP(&overrideIndexPath, "index", "i", "", "Location of the index file, overriding the config file")
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Whoops, something went wrong: %v", err)
+		os.Exit(1)
+	}
+}
+
+func getConfig(overrideIndexPath string) (core.Config, error) {
+	configPath := ConfigPath
+	if configPath == "" {
+		configPath = os.ExpandEnv("${COYOTE_CONFIG}")
+	}
+	if configPath == "" {
+		configPath = os.ExpandEnv("${HOME}/.coyoterc")
+	}
+
+	parsedConfig, err := adapters.NewTomlConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+	if overrideIndexPath != "" {
+		parsedConfig.Index = overrideIndexPath
+	}
+	return parsedConfig, nil
+}
+
+func initContext() {
+	// TODO: Overrides want handling in a better way than
+	// one by one, but this is a start
+	config, err := getConfig(overrideIndexPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
+		os.Exit(1)
+	}
+
+	var sourceControl core.IProvideSourceControl
+	if UseFakeGithub {
+		sourceControl = core.NewNullSourceControl()
+	} else {
+		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_AUTH_TOKEN"))
+	}
+
+	Context = core.Context{
+		Config:        config,
+		PackageFiles:  adapters.NewPackageTarFileProvider(),
+		SourceControl: sourceControl,
+		Platform:      adapters.NewPlatform(),
+	}
+}
+
+/*
 func RunRelease(context *core.Context, pkgname string, version string) {
 
 	assetURL, err := core.PackageRelease(context, pkgname, version)
@@ -55,105 +128,12 @@ func RunPackage(context *core.Context, args []string) {
 	}
 }
 
-func RunPackageBuild(context *core.Context, pkgname string, outdir string, version string) {
-	filename, err := core.PackageBuild(context, pkgname, outdir, version)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error building package: %s\n", err)
-		os.Exit(1)
-	}
-	fmt.Println(filename)
-}
 
 func RunApply(context *core.Context, args []string) {
 	filename := args[0]
 	core.Apply(context, filename)
 }
 
-func RunInit(context *core.Context, args []string) {
-	projectName := args[1]
-	techStack := args[0]
-	indexLocation := context.Config.GetIndex()
-	for i, arg := range args {
-		if arg == "--index" {
-			indexLocation = args[i+1]
-		}
-	}
-	err := core.Init(context, techStack, projectName, indexLocation)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initialising project: %s\n", err)
-		os.Exit(1)
-	}
-}
-
-func RunIndex(context *core.Context, args []string) {
-
-	// Ignore the first argument, which is the subcommand. Unused for the moment.
-	indexSourceFilename := args[1]
-	indexFilename := args[2]
-
-	err := core.BuildIndex(context, indexSourceFilename, indexFilename)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error building index: %s\n", err)
-		os.Exit(1)
-	}
-}
-
-func RunInstall(context *core.Context, args []string) {
-	pkgname := args[0]
-	indexLocation := context.Config.GetIndex()
-	reinstall := false
-	for i, arg := range args {
-		if arg == "--index" {
-			indexLocation = args[i+1]
-		}
-		if arg == "--reinstall" {
-			reinstall = true
-		}
-	}
-	err := core.Install(context, pkgname, indexLocation, reinstall)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error installing package: %s\n", err)
-		os.Exit(1)
-	}
-}
-
-func RunConfig(context *core.Context, args []string) {
-	// only one subcommand for now, `path`, which prints the path to the config file
-	cmd := args[0]
-	switch cmd {
-	case "path":
-		fmt.Println(context.Config.GetPath())
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", cmd)
-		os.Exit(1)
-	}
-}
-
-func getConfig(args []string) (core.Config, error) {
-	defaultConfigPath := os.ExpandEnv("${HOME}/.coyoterc")
-
-	configPath := os.ExpandEnv("${COYOTE_CONFIG}")
-
-	if configPath == "" {
-		configPath = defaultConfigPath
-	}
-
-	for i, arg := range args {
-		if arg == "--config" {
-			configPath = args[i+1]
-		}
-	}
-
-	return adapters.NewTomlConfig(configPath)
-}
-
-func RunOpen(context *core.Context) {
-	err := core.Open(context)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening repo: %s\n", err)
-		os.Exit(1)
-	}
-}
 
 func Run(context *core.Context, args []string) {
 	cmd := args[0]
@@ -223,3 +203,4 @@ func main() {
 
 	Run(&context, args)
 }
+*/

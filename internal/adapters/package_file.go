@@ -1,4 +1,4 @@
-package coyoteadapters
+package adapters
 
 import (
 	"archive/tar"
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/template"
 
-	core "nhs.uk/coyotecore"
+	core "github.com/nhsdigital/coyote/internal/core"
 )
 
 func CopyFile(src, dst string) {
@@ -80,19 +80,35 @@ func templateString(contents string, vars core.PackageTemplateVars, label string
 	return templated.String()
 }
 
-func PackageInit(pkgname string) {
-	os.Mkdir(".cypkg", 0777)
-	os.Mkdir(".cypkg/"+pkgname, 0777)
-	os.WriteFile(".cypkg/"+pkgname+"/DEPENDS",
+func PackageInit(pkgname string) error {
+	err := os.Mkdir(".cypkg", 0777)
+	if err != nil {
+		return fmt.Errorf("Error creating .cypkg directory: %v", err)
+	}
+
+	err = os.Mkdir(".cypkg/"+pkgname, 0777)
+	if err != nil {
+		return fmt.Errorf("Error creating .cypkg/%v directory: %v", pkgname, err)
+	}
+
+	err = os.WriteFile(".cypkg/"+pkgname+"/DEPENDS",
 		[]byte("# List package dependencies here, one per line."),
 		0777)
-	os.WriteFile(".cypkg/"+pkgname+"/CONFLICTS",
+	if err != nil {
+		return fmt.Errorf("Error creating .cypkg/%v/DEPENDS: %v", pkgname, err)
+	}
+
+	err = os.WriteFile(".cypkg/"+pkgname+"/CONFLICTS",
 		[]byte("# List package conflicts here, one per line."),
 		0777)
+	if err != nil {
+		return fmt.Errorf("Error creating .cypkg/%v/CONFLICTS: %v", pkgname, err)
+	}
+	return nil
 }
 
-func (p PackageTarFileProvider) Init(pkgname string) {
-	PackageInit(pkgname)
+func (p PackageTarFileProvider) Init(pkgname string) error {
+	return PackageInit(pkgname)
 }
 
 // This function defines the versioning scheme for coyote packages.
