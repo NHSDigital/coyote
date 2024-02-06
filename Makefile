@@ -28,3 +28,8 @@ build/bin/coyote: $(shell find . -type f -name '*.go')
 
 .PHONY: exe
 exe: build/bin/coyote
+
+.PHONY: home-install
+home-install: build/bin/coyote
+	mkdir -p ~/bin # This might not be on $$PATH, so check that
+	cp build/bin/coyote ~/bin/coyote
