@@ -57,6 +57,16 @@ def test_apply_two_packages_records_both_as_installed():
             assert(Path('.coyote/installed').is_file())
             assert(Path('.coyote/installed').read_text().strip() == 'test=v1.42.0\ntest2=v1.42.0')
 
+def test_apply_twice_does_not_record_twice():
+    with CoyoteTestContext() as ctx:
+        package_path = build_package(ctx.path(), 'test-package-root', 'test')
+
+        with NewProjectContext('target'):
+            coyote('apply', package_path)
+            coyote('apply', package_path)
+            assert(Path('.coyote/installed').is_file())
+            assert(Path('.coyote/installed').read_text().strip() == 'test=v1.42.0')
+
 def test_refuses_to_apply_conflicting_packages():
     with CoyoteTestContext() as ctx:
         pkg1 = PackageTemplate('test-package-root1') \

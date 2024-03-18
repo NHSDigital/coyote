@@ -11,6 +11,10 @@ def unchecked_coyote(*args, config="", env=os.environ):
     is only useful for checking that the default config path is correct."""
     coyote_path = Path(__file__).resolve().parent / '..' / '..' / 'build' / 'bin' / 'coyote'
 
+    # Nerf the github API calls so we can't accidentally spam the real github
+    if "--fake-github" not in args:
+        args = ["--fake-github"] + list(args)
+
     run = lambda args: subprocess.run([str(coyote_path)] + list(args),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -161,7 +165,6 @@ class NewDirContext(DirContext):
     def __init__(self, path):
         super().__init__(path)
         self.path.mkdir()
-
 class CoyoteTestContext:
     def __enter__(self):
         self.currentdir = Path.cwd()

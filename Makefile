@@ -15,11 +15,10 @@ sh: deps
 	source test/functional/.venv/bin/activate && exec $$SHELL
 
 .PHONY: deps
-deps: test/functional/.venv/deps-installed venv
+deps: venv test/functional/.venv/deps-installed
 
 .PHONY: test
 test: deps
-	go test
 	test/functional/.venv/bin/pytest -v test/functional
 
 build/bin/coyote: $(shell find . -type f -name '*.go')

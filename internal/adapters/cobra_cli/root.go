@@ -77,6 +77,7 @@ func initContext() {
 		PackageFiles:  adapters.NewPackageTarFileProvider(),
 		SourceControl: sourceControl,
 		Platform:      adapters.NewPlatform(),
+		Projects:      adapters.NewProjectProvider(),
 	}
 }
 

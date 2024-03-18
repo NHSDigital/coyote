@@ -30,6 +30,19 @@ type PackageFile interface {
 	Apply(vars PackageTemplateVars)
 }
 
+type Project interface {
+	Init(name string) error
+	GetPath() string
+	GetName() string
+	RecordInstalledPackage(pkg PackageFile) error
+	ReadInstalledPackages() ([][]string, error)
+}
+
+type IProvideProjects interface {
+	MaybeProject(path string) Project
+	NewProject(path string, name string) Project
+}
+
 type IProvidePackageFiles interface {
 	Init(pkgname string) error
 	Build(pkgname string, outdir string, version string) (string, error)
@@ -53,6 +66,7 @@ type Context struct {
 	PackageFiles  IProvidePackageFiles
 	SourceControl IProvideSourceControl
 	Platform      Platform
+	Projects      IProvideProjects
 }
 
 type PackageTemplateVars struct {

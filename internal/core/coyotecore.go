@@ -56,38 +56,19 @@ func conflictingInstalledPackages(pkg PackageFile) []string {
 	return result
 }
 
-func projectReadProjectName() string {
-	pkgname, err := os.ReadFile(".coyote/project-name")
-	if err != nil {
-		panic(err)
-	}
-	return string(pkgname)
-}
-
-func extractPackage(packageFiles IProvidePackageFiles, filename string) PackageFile {
+func extractPackage(project Project, packageFiles IProvidePackageFiles, filename string) PackageFile {
 	// This function extracts the package to the project. We record the installation
 	// in .coyote/installed.
 
 	var vars PackageTemplateVars
-	vars.ProjectName = projectReadProjectName()
+	vars.ProjectName = project.GetName()
 	pkg := packageFiles.Open(filename)
 
 	pkg.Apply(vars)
 
-	recordInstalledPackage(pkg.ReadMetadata("NAME"), pkg.ReadMetadata("VERSION"))
+	project.RecordInstalledPackage(pkg)
 
 	return pkg
-}
-
-func recordInstalledPackage(packageName string, version string) {
-	installedFilename := ".coyote/installed"
-
-	file, err := os.OpenFile(installedFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	file.Write([]byte(packageName + "=" + version + "\n"))
 }
 
 func runOnInstall(pkg PackageFile) error {
@@ -117,11 +98,14 @@ func runOnInstall(pkg PackageFile) error {
 }
 
 func Apply(context *Context, filename string) error {
-	checkForCoyoteProject()
+	project := context.Projects.MaybeProject(".")
+	if project == nil {
+		return fmt.Errorf("Not in a Coyote project.\n")
+	}
 	pkg := context.PackageFiles.Open(filename)
 	conflicts := conflictingInstalledPackages(pkg)
 	if len(conflicts) == 0 {
-		pkg := extractPackage(context.PackageFiles, filename)
+		pkg := extractPackage(project, context.PackageFiles, filename)
 		err := runOnInstall(pkg)
 
 		if err != nil {
@@ -233,7 +217,10 @@ func Init(context *Context, techStack string, projectName string) error {
 	if _, err := os.Stat(projectName); err == nil {
 		return fmt.Errorf("Project %s already exists.\n", projectName)
 	}
+	// Get the current working directory so we can return to it later.
+	cwd := os.Getenv("PWD")
 	// Now we make the project directory and store the name in .coyote/project-name.
+	newProject := context.Projects.NewProject(cwd, projectName)
 	os.MkdirAll(projectName+"/.coyote", 0777)
 	os.WriteFile(projectName+"/.coyote/project-name", []byte(projectName), 0777)
 
@@ -241,20 +228,25 @@ func Init(context *Context, techStack string, projectName string) error {
 
 		indexFile, err := openIndexFile(context.Config.GetIndex())
 		if err != nil {
-			return fmt.Errorf("Error opening index file: %v\n", err)
+			return fmt.Errorf("Error opening index file: %v", err)
 		}
 		//Now we extract the package to the project directory. After this, index is
 		//no longer valid, use indexFile.filename instead.
 		os.Chdir(projectName)
 		defer os.Chdir("..")
 
-		return installPackageTree(context.SourceControl, context.PackageFiles, techStack, indexFile, false)
+		return installPackageTree(newProject,
+			context.SourceControl,
+			context.PackageFiles,
+			techStack,
+			indexFile,
+			false)
 	} else {
 		return nil
 	}
 }
 
-func installPackageTree(sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
+func installPackageTree(project Project, sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
 
 	depQueue := []string{pkg}
@@ -342,7 +334,7 @@ func installPackageTree(sourceControl IProvideSourceControl, packageFiles IProvi
 			return fmt.Errorf("Package file missing: %v\n", err)
 		}
 
-		pkg := extractPackage(packageFiles, location)
+		pkg := extractPackage(project, packageFiles, location)
 		err = runOnInstall(pkg)
 
 		if err != nil {
@@ -353,6 +345,10 @@ func installPackageTree(sourceControl IProvideSourceControl, packageFiles IProvi
 }
 
 func Install(context *Context, pkgname string, reinstall bool) error {
+	project := context.Projects.MaybeProject(".")
+	if project == nil {
+		return fmt.Errorf("Not in a Coyote project.\n")
+	}
 	index := context.Config.GetIndex()
 	localIndex := index
 	if locationIsRemote(index) {
@@ -369,7 +365,7 @@ func Install(context *Context, pkgname string, reinstall bool) error {
 		return fmt.Errorf("Error opening index file: %v\n", err)
 	}
 
-	return installPackageTree(context.SourceControl, context.PackageFiles, pkgname, indexFile, reinstall)
+	return installPackageTree(project, context.SourceControl, context.PackageFiles, pkgname, indexFile, reinstall)
 }
 
 type Package struct {
@@ -636,26 +632,54 @@ func Open(context *Context) error {
 	return platform.OpenURL(strings.TrimSpace(string(remote)))
 }
 
+func pushTagsToOrigin() error {
+	// TODO this is potentially hazardous, because it pushes all tags and ignores whether
+	// what's checked out matches the version we're pushing.  Ok for a demo though.
+	return exec.Command("git", "push", "origin", "--follow-tags").Run()
+}
+
 func PackageRelease(context *Context, pkgname string, version string) (string, error) {
-	// Bad things will happen if we get version=="HEAD" here, so don't do that
-	if version == "HEAD" {
-		return "", fmt.Errorf("Cannot release HEAD version.")
-	}
-
-	// First we need the version string as a tag
-	tag := "coyote-" + version
-
 	//Barf if we're not in a coyote package
 	if _, err := os.Stat(".cypkg"); os.IsNotExist(err) {
 		return "", fmt.Errorf("Not in a Coyote package.\n")
 	}
 
-	//Barf if we're not in a git repo
-	if _, err := os.Stat(".git"); os.IsNotExist(err) {
-		return "", fmt.Errorf("Not in a git repo.\n")
+	// Bad things will happen if we get version=="HEAD" here, so don't do that
+	if version == "HEAD" {
+		return "", fmt.Errorf("Cannot release HEAD version.")
 	}
 
-	//Barf if we don't have an origin remote set
+	tag, err := tagForRelease(version, context, pkgname)
+	if err != nil {
+		return "", err
+	}
+
+	// We know the tag exists in the repo, so we can now build the tag.
+
+	packagePath, err := context.PackageFiles.Build(pkgname, ".", version)
+	if err != nil {
+		return "", fmt.Errorf("Error building package: %v\n", err)
+	}
+
+	err = pushTagsToOrigin()
+	if err != nil {
+		return "", fmt.Errorf("Error pushing tag to remote: %v\n", err)
+	}
+
+	return releaseFiles(context, "cypkg-"+pkgname, tag, []string{packagePath})
+}
+
+// This function does all the preflight checks to ensure that the version tag we're
+// asking for exists in the repository, and hasn't been released already.  This includes
+// tagging locally.
+// It returns the tag that was actually written to the repo.
+func tagForRelease(version string, context *Context, pkgname string) (string, error) {
+	tag := "coyote-" + version
+
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		return "", fmt.Errorf("Not in a git repository.\n")
+	}
+
 	remoteToOpen := "origin"
 	remoteExists, err := repoHasOriginSet(remoteToOpen)
 	if err != nil {
@@ -664,13 +688,11 @@ func PackageRelease(context *Context, pkgname string, version string) (string, e
 		return "", fmt.Errorf("No %s remote found.", remoteToOpen)
 	}
 
-	//Barf if the version is not a valid git tag
 	err = exec.Command("git", "check-ref-format", "--allow-onelevel", tag).Run()
 	if err != nil {
 		return "", fmt.Errorf("Invalid version: %v\n", err)
 	}
 
-	// Barf if the version already exists as a release on github
 	sourceControl := context.SourceControl
 	packageOrg := context.Config.GetPackageOrg()
 
@@ -682,7 +704,6 @@ func PackageRelease(context *Context, pkgname string, version string) (string, e
 		return "", fmt.Errorf("Release %s already exists.\n", version)
 	}
 
-	// Now we check whether the version already exists as a git tag.
 	output, err := exec.Command("git", "tag", "--list", tag).Output()
 	if err != nil {
 		return "", fmt.Errorf("Error checking for existing tag: %v\n", err)
@@ -698,25 +719,7 @@ func PackageRelease(context *Context, pkgname string, version string) (string, e
 			return "", fmt.Errorf("Error creating tag %v: %v\n", tag, err)
 		}
 	}
-
-	// We know the tag exists in the repo, so we can build the tag.
-
-	packagePath, err := context.PackageFiles.Build(pkgname, ".", version)
-	if err != nil {
-		return "", fmt.Errorf("Error building package: %v\n", err)
-	}
-	// TODO this is potentially hazardous, because it pushes all tags and ignores whether
-	// what's checked out matches the version we're pushing.  Ok for a demo though.
-	err = exec.Command("git", "push", "origin", "--follow-tags").Run()
-	if err != nil {
-		return "", fmt.Errorf("Error pushing tag to remote: %v\n", err)
-	}
-	assetURLs, err := sourceControl.CreateRelease("cypkg-"+pkgname, packageOrg, tag, []string{packagePath})
-	if err != nil {
-		return "", fmt.Errorf("Error creating release: %v\n", err)
-	}
-
-	return assetURLs[0], nil
+	return tag, nil
 }
 
 func PackageTest(context *Context, pkgname string) error {
@@ -747,4 +750,48 @@ func PackageTest(context *Context, pkgname string) error {
 	// Now we can apply the package.
 	// NOTE: THIS WILL RUN on-install IF IT EXISTS.
 	return Apply(context, packagePath)
+}
+
+// url, err = core.ReleaseIndex(&Context, args[0], args[1])
+func ReleaseIndex(context *Context, indexSrcInput string, versionToReleaseAs string) (string, error) {
+	// This function builds an index file and uploads it as a release.
+	// It returns the URL of the release, or an error.
+
+	// TODO: hardcode for now, figure out how to support more than one repo index later
+	repoName := "coyote-index"
+
+	// Barf if the input file doesn't exist
+	if _, err := os.Stat(indexSrcInput); os.IsNotExist(err) {
+		return "", fmt.Errorf("Index source file not found: %v", indexSrcInput)
+	}
+
+	tag, err := tagForRelease(versionToReleaseAs, context, repoName)
+	if err != nil {
+		return "", err
+	}
+
+	indexFile, err := os.CreateTemp("", "coyote")
+	if err != nil {
+		return "", fmt.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(indexFile.Name())
+
+	err = BuildIndex(context, indexSrcInput, indexFile.Name())
+	if err != nil {
+		return "", fmt.Errorf("Error building index: %v", err)
+	}
+
+	return releaseFiles(context, repoName, tag, []string{indexFile.Name()})
+}
+
+func releaseFiles(context *Context, repoName string, tag string, filesToRelease []string) (string, error) {
+	sourceControl := context.SourceControl
+	indexOrg := context.Config.GetPackageOrg()
+
+	assetURLs, err := sourceControl.CreateRelease(repoName, indexOrg, tag, filesToRelease)
+	if err != nil {
+		return "", fmt.Errorf("Error creating release: %v", err)
+	}
+
+	return assetURLs[0], nil
 }

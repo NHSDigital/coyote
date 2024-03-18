@@ -137,8 +137,28 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 
 	// Now because github's release downloads Just Don't Work with personal access tokens,
 	// we have to use the API instead.  For that to work, we need the asset ID, which we
-	// don't have at this point.  This is also why we need to know the org and repo.
+	// don't have at this point.
 
+	if parsedUrl.Host == "github.com" {
+		return downloadGithubReleaseUrl(parsedUrl, s, href, basename)
+	} else {
+		return downloadUrl(parsedUrl, s, href, basename)
+	}
+
+}
+
+func downloadUrl(parsedUrl *url.URL, s GithubSourceControl, href string, basename string) (string, error) {
+	targetFilename := "/tmp/" + basename
+
+	cmd := exec.Command("wget", "-O", targetFilename, href)
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("Error downloading file from %s: %v", href, err)
+	}
+	return targetFilename, nil
+}
+
+func downloadGithubReleaseUrl(parsedUrl *url.URL, s GithubSourceControl, href string, basename string) (string, error) {
 	// The href we have is the browser download URL, which is not the same as the API download URL, and
 	// also there is no direct way to get the asset ID from the browser download URL.  So we have to
 	// use the API to list all the releases, find the one with a matching browser download URL, and then
@@ -148,16 +168,21 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 
 	// First we need to know the org and repo.  I want to maintain the fiction that the
 	// href is a URL we can just download from, so we have to parse it to get the org and repo.
-	fragments := strings.Split(strings.Split(hrefWithoutFragment, "github.com/")[1], "/")
-	org := fragments[0]
-	repo := fragments[1]
+	// We can assume the href is a github.com URL, because that's all we support, but we sanity check
+	// anyway
 
-	// So, first we list all the releases
+	repo, org := urlToGithubRepo(parsedUrl)
+
+	// first we list all the releases
+	// Then we find the release with the matching browser download URL
+	// Then we get the asset ID
+	// Then finally we can download the file
+
 	releases, _, err := s.Client.Repositories.ListReleases(s.context, org, repo, nil)
 	if err != nil {
 		return "", fmt.Errorf("Error listing releases for %s/%s: %v", org, repo, err)
 	}
-	// Now we find the release with the matching browser download URL
+
 	var release *github.RepositoryRelease
 	for _, r := range releases {
 		for _, a := range r.Assets {
@@ -170,7 +195,7 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 	if release == nil {
 		return "", fmt.Errorf("Error finding release with browser download URL %s", href)
 	}
-	// Now we get the asset ID
+
 	var assetId int64
 	for _, a := range release.Assets {
 		if a.GetBrowserDownloadURL() == href {
@@ -179,10 +204,10 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 		}
 	}
 
-	// Now we can download the file
 	assetUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/assets/%d", org, repo, assetId)
 
 	targetFilename := "/tmp/" + basename
+
 	// TODO: we don't need wget for this, we can just use the http client
 	cmd := exec.Command("wget",
 		"--header", "Authorization: Bearer "+s.authToken+"",
@@ -195,6 +220,19 @@ func (s GithubSourceControl) DownloadReleaseFile(href string) (string, error) {
 		return "", fmt.Errorf("Error downloading file from %s: %v", href, err)
 	}
 	return targetFilename, nil
+}
+
+func urlToGithubRepo(parsedUrl *url.URL) (string, string) {
+	fragments := strings.Split(parsedUrl.Path, "/")[1:]
+	org := ""
+	repo := ""
+	if len(fragments) > 0 {
+		org = fragments[0]
+	}
+	if len(fragments) > 1 {
+		repo = fragments[1]
+	}
+	return repo, org
 }
 
 func (s GithubSourceControl) Push(repo string, org string) error {

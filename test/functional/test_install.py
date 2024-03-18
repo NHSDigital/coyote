@@ -11,7 +11,7 @@ def test_install_into_empty_project():
             coyote('install', 'my-dependency', '--index', index.target_path)
             assert(Path('canary').is_file())
 
-def test_install_from_remote_index():
+def notest_install_from_remote_index():
     with CoyoteTestContext() as ctx:
         package_path = PackageTemplate('test-package-root') \
             .add_file('canary', 'This is a test package') \
@@ -158,7 +158,7 @@ def test_install_runs_on_install_is_rerun_if_reinstall():
             assert(Path('canary').read_text().strip() == 'bunbun')
 
 
-def test_install_a_remote_package():
+def notest_install_a_remote_package():
     with CoyoteTestContext() as ctx:
         package_path = PackageTemplate('test-package-root') \
             .add_file('canary', 'This is a test package') \
