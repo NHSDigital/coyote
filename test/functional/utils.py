@@ -11,6 +11,8 @@ def unchecked_coyote(*args, config="", env=os.environ):
     is only useful for checking that the default config path is correct."""
     coyote_path = Path(__file__).resolve().parent / '..' / '..' / 'build' / 'bin' / 'coyote'
 
+    # Fix PWD because when we call os.chdir it doesn't update the PWD environment variable
+    env["PWD"] = os.getcwd()
     # Nerf the github API calls so we can't accidentally spam the real github
     if "--fake-github" not in args:
         args = ["--fake-github"] + list(args)
