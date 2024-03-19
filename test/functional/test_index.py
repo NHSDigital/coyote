@@ -90,12 +90,12 @@ def test_error_if_file_doesnt_exist():
         target_path = ctx.path()/"index.cyi"
 
         cmd = unchecked_coyote('index', 'build', index_source_path, target_path)
-        assert("Package file missing: " in cmd.stderr.decode('utf-8'))
+        assert("package file missing: " in cmd.stderr.decode('utf-8'))
 
 def test_index_release_fails_with_no_source_file():
     with CoyoteTestContext() as ctx:
         cmd = unchecked_coyote('index', 'release', 'no-such-file', "doesntmatter")
-        assert("Index source file not found: no-such-file" in cmd.stderr.decode('utf-8'))
+        assert("index source file not found: no-such-file" in cmd.stderr.decode('utf-8'))
 
 # coyote index release needs to be run in a checkout of the index repo so that it can make a release commit
 # and upload the built index as a release
@@ -104,5 +104,5 @@ def test_index_release_fails_if_not_in_git_repo():
         src_path = ctx.path()/'index-src'
         src_path.write_text("anything")
         cmd = unchecked_coyote('index', 'release', 'index-src', "doesntmatter")
-        assert("Not in a git repository." in cmd.stderr.decode('utf-8'))
+        assert("not in a git repository" in cmd.stderr.decode('utf-8'))
 

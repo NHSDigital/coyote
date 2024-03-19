@@ -19,8 +19,6 @@ def test_package_new():
 # the version.  Then we push the tag to github.  Then we build the package and publish
 # it as a release.
 # If the command succeeds, it prints the URL of the release on stdout.
-
-
 def test_sanity_check_version():
     # We can't impose version number constraints, because we always want to allow
     # 1.1.0 after 2.0.0, for instance.
@@ -34,4 +32,4 @@ def test_sanity_check_version():
             git("remote", "add", "origin", "whatever")
 
             output = unchecked_coyote('--fake-github', 'package', 'release', 'test', bad_version)
-            assert "Invalid version" in output.stderr.decode('utf-8')
+            assert "invalid version" in output.stderr.decode('utf-8')
