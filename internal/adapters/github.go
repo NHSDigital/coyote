@@ -190,7 +190,6 @@ func downloadGithubReleaseUrl(parsedUrl *url.URL, s GithubSourceControl, href st
 		if err != nil {
 			return "", fmt.Errorf("error getting latest release for %s/%s: %v", org, repo, err)
 		}
-		fmt.Fprintln(os.Stderr, "Latest release: ", release.GetTagName())
 		pathBasename := path.Base(parsedUrl.Path)
 		for _, a := range release.Assets {
 			assetBasename := path.Base(a.GetBrowserDownloadURL())
@@ -213,7 +212,6 @@ func downloadGithubReleaseUrl(parsedUrl *url.URL, s GithubSourceControl, href st
 
 		for _, r := range releases {
 			for _, a := range r.Assets {
-				fmt.Println("Browser download URL: ", a.GetBrowserDownloadURL())
 				if a.GetBrowserDownloadURL() == href {
 					release = r
 					break
@@ -247,7 +245,7 @@ func downloadGithubReleaseUrl(parsedUrl *url.URL, s GithubSourceControl, href st
 		"--header", "X-GitHub-Api-Version: 2022-11-28",
 		"-O", targetFilename,
 		assetUrl)
-	cmd.Stderr = os.Stderr
+
 	err = cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("error downloading file from %s: %v", href, err)
