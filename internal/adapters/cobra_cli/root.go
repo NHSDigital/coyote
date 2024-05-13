@@ -78,6 +78,7 @@ func initContext() {
 		SourceControl: sourceControl,
 		Platform:      adapters.NewPlatform(),
 		Projects:      adapters.NewProjectProvider(),
+		IndexFiles:    adapters.NewIndexFileProvider(),
 	}
 }
 

@@ -1,6 +1,11 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+	"os/exec"
+	"strings"
+)
 
 // We provide a null source control adapter for testing purposes.  It logs
 // all the calls it receives to stdout, so the tests can see it, but does nothing.
@@ -61,8 +66,33 @@ func (s *NullSourceControl) DoesReleaseExist(repo string, org string, tag string
 }
 
 func (s *NullSourceControl) DownloadReleaseFile(href string) (string, error) {
+	/*  Note that this function only refuses to download files from github.com.
+	 *  It will download files from localhost. */
 	fmt.Println("NullSourceControl called: NullSourceControl.DownloadReleaseFile(", href, ")")
-	return "", nil
+	hrefWithoutFragment := strings.Split(href, "#")[0]
+	parsedUrl, err := url.Parse(hrefWithoutFragment)
+	if err != nil {
+		return "", err
+	}
+
+	if parsedUrl.Host == "github.com" || parsedUrl.Host == "api.github.com" {
+		return "nosuchfile", nil
+	}
+
+	filename := parsedUrl.Path
+	basename := strings.Split(filename, "/")[len(strings.Split(filename, "/"))-1]
+	if basename == "" {
+		return "", fmt.Errorf("error parsing filename from url %s", href)
+	}
+
+	targetFilename := "/tmp/" + basename
+
+	cmd := exec.Command("wget", "-O", targetFilename, href)
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("error downloading file from %s: %v", href, err)
+	}
+	return targetFilename, nil
 }
 
 func (s *NullSourceControl) Push(repo string, org string) error {

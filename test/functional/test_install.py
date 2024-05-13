@@ -11,7 +11,7 @@ def test_install_into_empty_project():
             coyote('install', 'my-dependency', '--index', index.target_path)
             assert(Path('canary').is_file())
 
-def notest_install_from_remote_index():
+def test_install_from_remote_index():
     with CoyoteTestContext() as ctx:
         package_path = PackageTemplate('test-package-root') \
             .add_file('canary', 'This is a test package') \

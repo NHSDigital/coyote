@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -118,81 +117,6 @@ func Apply(context *Context, filename string) error {
 	}
 }
 
-type IndexFile struct {
-	filename string
-	contents Index
-}
-
-func openIndexFile(filename string) (IndexFile, error) {
-
-	st, err := os.Stat(filename)
-	if err != nil {
-		return IndexFile{}, fmt.Errorf("index file %s does not exist", filename)
-	}
-	if st.Mode().IsDir() {
-		return IndexFile{}, fmt.Errorf("index file %s is a directory, not a file", filename)
-	}
-
-	indexFile, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer indexFile.Close()
-
-	indexBytes, err := io.ReadAll(indexFile)
-	if err != nil {
-		panic(err)
-	}
-
-	var indexData Index
-	err = json.Unmarshal(indexBytes, &indexData)
-	if err != nil {
-		return IndexFile{}, fmt.Errorf("error parsing index file %s: %v", filename, err)
-	}
-
-	//Use the absolute path to the index file so we can use it if we change directories.
-	absFilename, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	absFilename += "/" + filename
-
-	return IndexFile{filename: absFilename, contents: indexData}, nil
-}
-
-func (indexFile IndexFile) readPackageLocation(pkgName string) (string, error) {
-	// This function reads the index file, and returns the location of the package named by pkgName.
-	// It returns an empty string if the package is not found.
-
-	indexData := indexFile.contents
-	if _, ok := indexData.Packages[pkgName]; !ok {
-		return "", fmt.Errorf("package %s not found in index file %s", pkgName, indexFile.filename)
-	}
-	return indexData.Packages[pkgName].Location, nil
-}
-
-func (indexFile IndexFile) readPackageDependencies(pkgName string) ([]string, error) {
-	// This function reads the index file, and returns the dependencies of the package named by pkgName.
-	// It returns an empty slice if the package is not found.
-
-	indexData := indexFile.contents
-	if _, ok := indexData.Packages[pkgName]; !ok {
-		return []string{}, fmt.Errorf("package %s not found in index file %s", pkgName, indexFile.filename)
-	}
-	return indexData.Packages[pkgName].Dependencies, nil
-}
-
-func (indexFile IndexFile) readPackageConflicts(pkgName string) ([]string, error) {
-	// This function reads the index file, and returns the conflicts of the package named
-	// by pkgName. It returns an empty slice if the package is not found.
-
-	indexData := indexFile.contents
-	if _, ok := indexData.Packages[pkgName]; !ok {
-		return []string{}, fmt.Errorf("package %s not found in index file %s", pkgName, indexFile.filename)
-	}
-	return indexData.Packages[pkgName].Conflicts, nil
-}
-
 func stringInSlice(str string, slice []string) bool {
 	for _, s := range slice {
 		if s == str {
@@ -204,42 +128,37 @@ func stringInSlice(str string, slice []string) bool {
 
 func Init(context *Context, techStack string, projectName string) error {
 	// This function creates a new Coyote project, named projectName.
-	// The project will be created in the current directory.
-	// The name will be stored in .coyote/project-name.
+	// The project root dir will be created in the current directory.
+	// The name will be stored in projectName/.coyote/projectName.
 
 	if _, err := os.Stat(projectName); err == nil {
 		return fmt.Errorf("project %s already exists", projectName)
 	}
-	// Get the current working directory so we can return to it later.
-	cwd := os.Getenv("PWD")
-	// Now we make the project directory and store the name in .coyote/project-name.
-	newProject := context.Projects.NewProject(cwd, projectName)
-	os.MkdirAll(projectName+"/.coyote", 0777)
-	os.WriteFile(projectName+"/.coyote/project-name", []byte(projectName), 0777)
+
+	newProject := context.Projects.NewProject(projectName, projectName)
 
 	if techStack != "empty" {
+		cwd := os.Getenv("PWD")
+		os.Chdir(newProject.GetPath())
+		defer os.Chdir(cwd)
 
-		indexFile, err := openIndexFile(context.Config.GetIndex())
+		index, err := openIndex(context, context.Config.GetIndex())
 		if err != nil {
 			return fmt.Errorf("error opening index file: %v", err)
 		}
-		//Now we extract the package to the project directory. After this, index is
-		//no longer valid, use indexFile.filename instead.
-		os.Chdir(projectName)
-		defer os.Chdir("..")
 
 		return installPackageTree(newProject,
 			context.SourceControl,
 			context.PackageFiles,
 			techStack,
-			indexFile,
+			index,
 			false)
 	} else {
 		return nil
 	}
 }
 
-func installPackageTree(project Project, sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, indexFile IndexFile, reinstall bool) error {
+func installPackageTree(project Project, sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, index Index, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
 
 	depQueue := []string{pkg}
@@ -248,10 +167,10 @@ func installPackageTree(project Project, sourceControl IProvideSourceControl, pa
 	for len(depQueue) > 0 {
 		dep := depQueue[0]
 		depQueue = depQueue[1:]
-		newDeps, err := indexFile.readPackageDependencies(dep)
+		newDeps, err := index.ReadPackageDependencies(dep)
 		if err != nil {
 			return fmt.Errorf("error getting dependencies for %s from index file %s: %v",
-				dep, indexFile.filename, err)
+				dep, index.Describe(), err)
 		}
 		for _, newDep := range newDeps {
 			if !stringInSlice(newDep, depQueue) && !stringInSlice(newDep, depsToInstall) {
@@ -281,10 +200,10 @@ func installPackageTree(project Project, sourceControl IProvideSourceControl, pa
 	// both directions.  That could be done at index build time.
 	conflictMap := make(map[string][]string)
 	for _, dep := range depsToInstall {
-		conflicts, err := indexFile.readPackageConflicts(dep)
+		conflicts, err := index.ReadPackageConflicts(dep)
 		if err != nil {
 			return fmt.Errorf("error getting conflicts for %s from index file %s: %v",
-				dep, indexFile.filename, err)
+				dep, index.Describe(), err)
 		}
 		for _, conflict := range conflicts {
 			if stringInSlice(conflict, installedPackages) {
@@ -310,7 +229,7 @@ func installPackageTree(project Project, sourceControl IProvideSourceControl, pa
 			continue
 		}
 
-		location, err := indexFile.readPackageLocation(dep)
+		location, err := index.ReadPackageLocation(dep)
 		if err != nil {
 			return fmt.Errorf("error getting package location: %v", err)
 		}
@@ -342,36 +261,14 @@ func Install(context *Context, pkgName string, reinstall bool) error {
 	if project == nil {
 		return fmt.Errorf("not in a Coyote project")
 	}
-	index := context.Config.GetIndex()
-	localIndex := index
-	if locationIsRemote(index) {
-		myLocalIndex, err := context.SourceControl.DownloadReleaseFile(index)
-		localIndex = myLocalIndex
-		if err != nil {
-			return fmt.Errorf("error downloading index file: %v", err)
-		}
-		defer os.Remove(localIndex)
-	}
+	indexLocation := context.Config.GetIndex()
 
-	indexFile, err := openIndexFile(localIndex)
+	index, err := openIndex(context, indexLocation)
 	if err != nil {
 		return fmt.Errorf("error opening index file: %v", err)
 	}
 
-	return installPackageTree(project, context.SourceControl, context.PackageFiles, pkgName, indexFile, reinstall)
-}
-
-type Package struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version"`
-	Location     string   `json:"location"`
-	Dependencies []string `json:"dependencies"`
-	Conflicts    []string `json:"conflicts"`
-}
-
-type Index struct {
-	Version  string             `json:"version"`
-	Packages map[string]Package `json:"packages"`
+	return installPackageTree(project, context.SourceControl, context.PackageFiles, pkgName, index, reinstall)
 }
 
 func locationIsRemote(location string) bool {
@@ -391,10 +288,10 @@ func removeComments(body string) []string {
 	return result
 }
 
-func readIndexEntry(packageFiles IProvidePackageFiles, packageLocation string) Package {
+func readIndexEntry(packageFiles IProvidePackageFiles, packageLocation string) PackageIndexEntry {
 	file := packageFiles.Open(packageLocation)
 
-	return Package{
+	return PackageIndexEntry{
 		Name:         file.ReadMetadata("NAME"),
 		Version:      file.ReadMetadata("VERSION"),
 		Conflicts:    removeComments(file.ReadMetadata("CONFLICTS")),
@@ -424,7 +321,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 	// Each package metadata is a map of metadata fields to values.
 	// The metadata fields are `name`, `version`, `location`, `conflicts`, and `dependencies`.
 
-	packages := make(map[string]Package)
+	packages := make(map[string]PackageIndexEntry)
 	indexSourceScanner := bufio.NewScanner(indexSource)
 	for indexSourceScanner.Scan() {
 		packageLocation := indexSourceScanner.Text()
@@ -469,7 +366,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 			if _, ok := packages[conflict]; ok {
 				if !stringInSlice(pkg.Name, packages[conflict].Conflicts) {
 					// Can't assign to pkg.Conflicts, so we have to make a new one.
-					packages[conflict] = Package{
+					packages[conflict] = PackageIndexEntry{
 						Name:         packages[conflict].Name,
 						Version:      packages[conflict].Version,
 						Location:     packages[conflict].Location,
@@ -492,7 +389,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 	}
 	defer indexFile.Close()
 
-	index := Index{}
+	index := IndexData{}
 	index.Version = "1"
 	index.Packages = packages
 
@@ -762,7 +659,18 @@ func ReleaseIndex(context *Context, indexSrcInput string, versionToReleaseAs str
 		return "", err
 	}
 
-	indexFile, err := os.CreateTemp("", "coyote")
+	tempDir, err := os.MkdirTemp("", "coyote")
+	if err != nil {
+		return "", fmt.Errorf("error creating temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	indexFilePath := path.Join(tempDir, "index")
+	indexFile, err := os.Create(indexFilePath)
+	if err != nil {
+		return "", fmt.Errorf("error creating index file: %v", err)
+	}
+	defer indexFile.Close()
 	if err != nil {
 		return "", fmt.Errorf("error creating temp file: %v", err)
 	}

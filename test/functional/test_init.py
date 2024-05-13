@@ -1,4 +1,5 @@
 from utils import *
+from http_server import PackageServer
 
 def test_init_creates_project_dir():
     with CoyoteTestContext() as ctx:
@@ -6,6 +7,7 @@ def test_init_creates_project_dir():
         # Assume not for now
         coyote('init', 'empty', 'my-project')
         assert ctx.path('my-project').exists()
+        assert not ctx.path('.coyote').is_file()
 
 def test_init_saves_project_name():
     with CoyoteTestContext() as ctx:
@@ -25,6 +27,17 @@ def test_init_from_package():
         coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
         print(list(ctx.path('my-new-project').glob('**/*')))
         assert(Path('my-new-project', 'canary').is_file())
+
+def test_init_from_remote_index():
+    with CoyoteTestContext() as ctx:
+        package_path = PackageTemplate('test-package-root') \
+            .add_file('canary', 'This is a test package') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+        with PackageServer(ctx.path()) as server:
+            location = server.url(package_path.name)
+            index = Indexer(location).build(ctx)
+            coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', server.url(index.target_path.name))
+            assert(Path('my-new-project/canary').is_file())
 
 def test_init_fails_if_project_already_exists():
     with CoyoteTestContext() as ctx:

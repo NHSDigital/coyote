@@ -67,6 +67,7 @@ type Context struct {
 	SourceControl IProvideSourceControl
 	Platform      Platform
 	Projects      IProvideProjects
+	IndexFiles    IProvideIndexFiles
 }
 
 type PackageTemplateVars struct {
@@ -75,4 +76,13 @@ type PackageTemplateVars struct {
 
 type Platform interface {
 	OpenURL(url string) error
+}
+
+type IndexFile interface {
+	GetPackage(pkgName string) (PackageIndexEntry, error)
+	Describe() string
+}
+
+type IProvideIndexFiles interface {
+	OpenIndexFile(context *Context, filename string) (IndexFile, error)
 }
