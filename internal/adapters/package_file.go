@@ -83,26 +83,26 @@ func templateString(contents string, vars core.PackageTemplateVars, label string
 func PackageInit(pkgname string) error {
 	err := os.Mkdir(".cypkg", 0777)
 	if err != nil {
-		return fmt.Errorf("Error creating .cypkg directory: %v", err)
+		return fmt.Errorf("error creating .cypkg directory: %v", err)
 	}
 
 	err = os.Mkdir(".cypkg/"+pkgname, 0777)
 	if err != nil {
-		return fmt.Errorf("Error creating .cypkg/%v directory: %v", pkgname, err)
+		return fmt.Errorf("error creating .cypkg/%v directory: %v", pkgname, err)
 	}
 
 	err = os.WriteFile(".cypkg/"+pkgname+"/DEPENDS",
 		[]byte("# List package dependencies here, one per line."),
 		0777)
 	if err != nil {
-		return fmt.Errorf("Error creating .cypkg/%v/DEPENDS: %v", pkgname, err)
+		return fmt.Errorf("error creating .cypkg/%v/DEPENDS: %v", pkgname, err)
 	}
 
 	err = os.WriteFile(".cypkg/"+pkgname+"/CONFLICTS",
 		[]byte("# List package conflicts here, one per line."),
 		0777)
 	if err != nil {
-		return fmt.Errorf("Error creating .cypkg/%v/CONFLICTS: %v", pkgname, err)
+		return fmt.Errorf("error creating .cypkg/%v/CONFLICTS: %v", pkgname, err)
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func tagFromVersion(version string) string {
 func PackageBuild(pkgname string, outdir string, version string) (string, error) {
 	tempDir, err := os.MkdirTemp("", "coyote")
 	if err != nil {
-		return "", fmt.Errorf("Error creating temp dir: %v", err)
+		return "", fmt.Errorf("error creating temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -157,10 +157,9 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 		cmd = exec.Command("git", "clone", "--branch", rev, ".", tempDir)
 	}
 
-	output, err := cmd.CombinedOutput()
+	_, err = cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, string(output))
-		return "", fmt.Errorf("Error cloning %v: %v", version, err)
+		return "", fmt.Errorf("error cloning %v: %v", version, err)
 	}
 
 	os.RemoveAll(tempDir + "/.git")
@@ -181,14 +180,14 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	if _, err := os.Stat(outdir); os.IsNotExist(err) {
 		os.MkdirAll(outdir, 0777)
 	} else if err != nil {
-		return "", fmt.Errorf("Error making the output dir: %v", err)
+		return "", fmt.Errorf("error making the output dir: %v", err)
 	}
 
 	outfile := outdir + "/" + filename
 
 	err = os.Rename(".cypkg/tmp/"+filename, outfile)
 	if err != nil {
-		return "", fmt.Errorf("Error moving the output file: %v", err)
+		return "", fmt.Errorf("error moving the output file: %v", err)
 	}
 
 	return outfile, nil
