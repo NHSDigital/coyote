@@ -31,7 +31,7 @@ func NewTomlConfig(path string) (*TomlConfig, error) {
 	// This is specific to the toml config.  It's not valid to set the index
 	// to an empty string *here*, but the NullConfig returns it in the core module.
 	if config.Index == "" {
-		return nil, fmt.Errorf("Invalid config file: index must be set")
+		return nil, fmt.Errorf("invalid config file: index must be set")
 	}
 
 	// Store the path to the config file so we can avoid having to repeatedly
