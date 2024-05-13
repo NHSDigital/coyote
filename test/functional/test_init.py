@@ -122,3 +122,14 @@ def test_init_installs_package_dependencies_recursively():
         coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
 
         assert(Path('my-new-project', 'canary').is_file())
+
+def test_init_applies_project_name_template_value():
+    with CoyoteTestContext() as ctx:
+        package_path = PackageTemplate('test-package-root') \
+            .add_file('templated-file', 'This is a test package in {{.ProjectName}}') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+        index = Indexer(package_path).build(ctx)
+
+        coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
+
+        assert Path('my-new-project', 'templated-file').read_text() == 'This is a test package in my-new-project'

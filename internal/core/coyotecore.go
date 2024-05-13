@@ -135,10 +135,11 @@ func Init(context *Context, techStack string, projectName string) error {
 		return fmt.Errorf("project %s already exists", projectName)
 	}
 
-	newProject := context.Projects.NewProject(projectName, projectName)
+	cwd := os.Getenv("PWD")
+	projectPath := path.Join(cwd, projectName)
+	newProject := context.Projects.NewProject(projectPath, projectName)
 
 	if techStack != "empty" {
-		cwd := os.Getenv("PWD")
 		os.Chdir(newProject.GetPath())
 		defer os.Chdir(cwd)
 
