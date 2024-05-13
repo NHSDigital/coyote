@@ -52,10 +52,11 @@ func (s GithubSourceControl) CreateRelease(repo string, org string, tag string, 
 	files := make([]*os.File, len(filenames))
 	for i, filename := range filenames {
 		file, err := os.Open(filename)
-		defer file.Close()
 		if err != nil {
 			return nil, err
 		}
+		defer file.Close()
+
 		files[i] = file
 	}
 
