@@ -17,9 +17,16 @@ sh: deps
 .PHONY: deps
 deps: venv test/functional/.venv/deps-installed
 
-.PHONY: test
-test: deps
+.PHONY: test-unit
+test-unit:
+	go test -v ./...
+
+.PHONY: test-functional
+test-functional: exe deps
 	test/functional/.venv/bin/pytest -v test/functional
+
+.PHONY: test
+test: test-unit test-functional
 
 build/bin/coyote: $(shell find . -type f -name '*.go')
 	mkdir -p build/bin

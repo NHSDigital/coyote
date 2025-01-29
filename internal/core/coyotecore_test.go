@@ -11,7 +11,7 @@ func TestPackageRelease(t *testing.T) {
 	t.Run("Test not in a Coyote package", func(t *testing.T) {
 		// Call the PackageRelease function without creating a .cypkg file
 		_, err := PackageRelease(nil, "anything", "anything")
-		expectedErr := fmt.Errorf("Not in a Coyote package.\n")
+		expectedErr := fmt.Errorf("not in a Coyote package")
 		if err == nil {
 			t.Errorf("Expected error, got nil")
 		} else if err.Error() != expectedErr.Error() {
@@ -39,7 +39,7 @@ func TestPackageRelease(t *testing.T) {
 
 		// Call the PackageRelease function without creating a .git file
 		_, err = PackageRelease(nil, "anything", "anything")
-		expectedErr := fmt.Errorf("Not in a git repo.\n")
+		expectedErr := fmt.Errorf("not in a git repository")
 		if err == nil {
 			t.Errorf("Expected error, got nil")
 		} else if err.Error() != expectedErr.Error() {

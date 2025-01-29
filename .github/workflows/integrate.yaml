@@ -1,0 +1,32 @@
+name: "Integration tests against current main branch"
+
+on: [push]
+
+jobs:
+  test:
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out the code
+        uses: actions/checkout@v4
+
+      - name: set up golang
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: run unit tests
+        run: make test-unit
+
+      - name: build the binary
+        run: make exe
+
+      - name: set up python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.12
+
+      - name: run functional tests
+        run: make test-functional
