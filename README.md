@@ -216,6 +216,12 @@ repository, and will install no dependencies.  It *will* obey
 `CONFLICTS` and refuse to install if there is already a conflicting
 dependency installed.
 
+`coyote release <version> <files...>`
+
+Tag the version and create a release on GitHub with the given files.
+If the tag does not yet exist, it will be created.  The tag will be
+pushed to the remote.
+
 ## Where Do We Go From Here
 
 As it stands, the upstream repository template is monolithic, and we

@@ -696,3 +696,48 @@ func releaseFiles(context *Context, repoName string, tag string, filesToRelease 
 
 	return assetURLs[0], nil
 }
+
+func Release(context *Context, version string, description string, remoteName string, filenames []string) ([]string, error) {
+	// This function releases the named files. It is not only for releasing packages, it can
+	// release anything.
+	// It uploads the passed files to github as a release, using the `origin` git remote as the target repository.
+	// It returns the URL of the release, or an error.
+
+	// Barf if we're not in a git repo
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		return nil, fmt.Errorf("not in a git repository")
+	}
+
+	// Barf if the version is HEAD
+	if version == "HEAD" {
+		return nil, fmt.Errorf("cannot release HEAD version")
+	}
+
+	// Gather the information we need to create the release
+	// get the org name and the repo name from the git remote
+	remoteExists, err := repoHasOriginSet(remoteName)
+	if err != nil {
+		return nil, fmt.Errorf("error checking for remote: %v", err)
+	} else if !remoteExists {
+		return nil, fmt.Errorf("no %s remote found", remoteName)
+	}
+
+	remote, err := exec.Command("git", "remote", "get-url", remoteName).Output()
+	if err != nil {
+		return nil, fmt.Errorf("error getting remote url: %v", err)
+	}
+
+	// double-check that the remote is a github repo
+	if !strings.Contains(string(remote), "github.com") {
+		return nil, fmt.Errorf("remote is not a github repo")
+	}
+
+	// get the org and repo names
+	remoteParts := strings.Split(strings.TrimSpace(string(remote)), "/")
+	repoName := strings.TrimSuffix(remoteParts[len(remoteParts)-1], ".git")
+	orgName := remoteParts[len(remoteParts)-2]
+
+	// Now just do the release: if any of these params are wrong then the API will barf for us
+	assetURLs, err := context.SourceControl.CreateRelease(repoName, orgName, version, filenames)
+	return assetURLs, err
+}
