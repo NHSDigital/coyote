@@ -30,3 +30,6 @@ jobs:
 
       - name: run functional tests
         run: make test-functional
+
+      - name: build the release packages
+        run: make -j4 packages
