@@ -42,7 +42,7 @@ https://github.com/NHSDigital/cypkg-repository-template/releases/download/coyote
 https://github.com/NHSDigital/cypkg-python-hello-world/releases/download/coyote-0.0.1/default.python-hello-world-0.0.1.cypkg
 ```
 
-Ensure that the `GITHUB_AUTH_TOKEN` environment variable is a valid
+Ensure that the `GITHUB_TOKEN` environment variable is a valid
 auth token with rights to see download internal repositories in the
 `NHSDigital` org.
 

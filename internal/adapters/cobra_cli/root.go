@@ -69,7 +69,7 @@ func initContext() {
 	if UseFakeGithub {
 		sourceControl = core.NewNullSourceControl()
 	} else {
-		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_AUTH_TOKEN"))
+		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_TOKEN"))
 	}
 
 	Context = core.Context{
@@ -182,7 +182,7 @@ func main() {
 		}
 	}
 	if sourceControl == nil {
-		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_AUTH_TOKEN"))
+		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_TOKEN"))
 	}
 
 	context := core.Context{
