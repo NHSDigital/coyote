@@ -21,12 +21,14 @@ var releaseCmd = &cobra.Command{
 		version := args[0]
 		filenames := args[1:]
 
-		if description[0] == '@' {
-			readDescription, err := os.ReadFile(description[1:])
-			if err != nil {
-				return err
+		if description != "" {
+			if description[0] == '@' {
+				readDescription, err := os.ReadFile(description[1:])
+				if err != nil {
+					return err
+				}
+				description = string(readDescription)
 			}
-			description = string(readDescription)
 		}
 
 		urls, err := core.Release(&Context, version, description, remoteName, filenames)

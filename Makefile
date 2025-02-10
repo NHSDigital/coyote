@@ -39,3 +39,22 @@ exe: build/bin/coyote
 home-install: build/bin/coyote
 	mkdir -p ~/bin # This might not be on $$PATH, so check that
 	cp build/bin/coyote ~/bin/coyote
+
+build/%.tgz: build/bin-%/coyote
+	mkdir -p build/packages
+	tar -czf build/$*.tgz -C build/bin-$* coyote
+
+.PHONY: packages
+packages: build/linux-amd64.tgz
+packages: build/linux-arm64.tgz
+packages: build/darwin-amd64.tgz
+packages: build/darwin-arm64.tgz
+
+build/bin-%/coyote: $(shell find . -type f -name '*.go')
+	mkdir -p build/bin-$*
+	export GOOS=$$(echo $* | cut -d- -f1)
+	export GOARCH=$$(echo $* | cut -d- -f2)
+	go build -o build/bin-$*/coyote ./cmd/coyote/main.go
+
+
+.ONESHELL:
