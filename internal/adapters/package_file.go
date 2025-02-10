@@ -159,7 +159,7 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 
 	_, err = cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("error cloning %v: %v", version, err)
+		return "", fmt.Errorf("error running clone command `%v` %v: %v", cmd, version, err)
 	}
 
 	os.RemoveAll(tempDir + "/.git")
