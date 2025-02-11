@@ -24,6 +24,7 @@ jobs:
         run: make exe && tar -cf coyote.tar build/bin/coyote
 
       - name: upload the binary as an artefact
+        if: startsWith(github.event.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         id: coyote-binary
         with:
