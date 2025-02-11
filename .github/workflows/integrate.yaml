@@ -50,6 +50,8 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     if: startsWith(github.event.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: checkout the code
         uses: actions/checkout@v4
