@@ -28,6 +28,11 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Configure git so it doesn't error out
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
       - name: run functional tests
         run: make test-functional
 
