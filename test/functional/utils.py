@@ -108,6 +108,8 @@ class PackageTemplate:
                 self.version('v1.42.0')
             for op in self.ops:
                 if op[0] == 'set_version':
+                    if len(op) == 1 or str(op[1]) == "":
+                        raise ValueError("Version must be provided")
                     git('tag', '--annotate', '-m', "No tag message", 'coyote-' + op[1])
                 elif op[0] == 'add_file':
                     target = Path(op[1])
