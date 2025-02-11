@@ -8,7 +8,8 @@ def unchecked_coyote(*args, config="", env=os.environ):
     """Run the coyote command, ignoring the return code. Use this if you are testing for an error.
 
     Pass config="" to use the default config. Pass config=None not to write a config file.  This
-    is only useful for checking that the default config path is correct."""
+    is only useful for checking that the default config path is correct, or checking that commands
+    that don't need it can run without it."""
     coyote_path = Path(__file__).resolve().parent / '..' / '..' / 'build' / 'bin' / 'coyote'
 
     # Fix PWD because when we call os.chdir it doesn't update the PWD environment variable

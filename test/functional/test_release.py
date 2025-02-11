@@ -11,3 +11,12 @@ def test_release_file():
         file_path.write_text("This is a test release file")
         output = coyote('--fake-github', 'release', 'dummytag', file_path)
         assert f"NullSourceControl.CreateRelease( repo , org , dummytag , [{file_path}] )" in output.stdout.decode('utf-8')
+
+def test_can_release_with_no_config():
+    with CoyoteTestContext() as ctx:
+        git("init")
+        git("remote", "add", "origin", "https://github.com/org/repo.git")
+        file_path = ctx.path() / "canary"
+        file_path.write_text("This is a test release file")
+        output = coyote('--fake-github', 'release', 'dummytag', file_path, config=None)
+        assert f"NullSourceControl.CreateRelease( repo , org , dummytag , [{file_path}] )" in output.stdout.decode('utf-8')

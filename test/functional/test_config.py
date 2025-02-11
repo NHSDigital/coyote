@@ -1,5 +1,7 @@
 from utils import *
 
+import re
+
 def test_get_default_config_path():
     with CoyoteTestContext() as ctx:
         # We need to do something kinda nasty here because we don't know if the
@@ -17,7 +19,7 @@ def test_get_default_config_path():
 def test_get_override_config_path():
     with CoyoteTestContext() as ctx:
         config_path = unchecked_coyote('config', 'path', '--config', 'foo').stderr.strip()
-        assert('foo does not exist' in config_path.decode("utf-8"))
+        assert(re.search(r'foo.*does not exist', config_path.decode("utf-8")))
 
 # TODO test that we can pass the config path as an environment variable
 def test_environment_variable_config_path():
