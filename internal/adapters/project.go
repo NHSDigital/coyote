@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -50,6 +51,20 @@ func (p *Project) GetName() string {
 
 func (p *Project) RecordInstalledPackage(pkg core.PackageFile) error {
 	installedFile := NewInstalledFile(p.Path + "/.coyote/installed")
+	name := pkg.ReadMetadata("NAME")
+	version := pkg.ReadMetadata("VERSION")
+
+	var errors []string
+
+	if name == "" {
+		errors = append(errors, "missing NAME")
+	}
+	if version == "" {
+		errors = append(errors, "missing VERSION")
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("package file is missing required fields: %s", strings.Join(errors, ", "))
+	}
 	return installedFile.Record(pkg.ReadMetadata("NAME"), pkg.ReadMetadata("VERSION"))
 }
 

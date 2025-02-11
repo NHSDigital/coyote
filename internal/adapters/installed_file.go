@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
@@ -45,6 +46,22 @@ func installedLines(filename string) ([]string, error) {
 
 // Record marks a package as installed by adding its name to the .coyote/installed file.
 func (f InstalledFile) Record(packageName string, version string) error {
+	// packageName or version being empty is an error
+	if packageName == "" {
+		return fmt.Errorf("missing NAME")
+	}
+	if version == "" {
+		return fmt.Errorf("missing VERSION")
+	}
+
+	// packageName or version having an = in them is an error
+	if strings.Contains(packageName, "=") {
+		return fmt.Errorf("NAME cannot contain '='")
+	}
+	if strings.Contains(version, "=") {
+		return fmt.Errorf("VERSION cannot contain '='")
+	}
+
 	lines, err := installedLines(f.Filename)
 	if err != nil {
 		return err
