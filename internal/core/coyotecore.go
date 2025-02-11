@@ -107,7 +107,6 @@ func Apply(context *Context, filename string) error {
 	pkg := context.PackageFiles.Open(filename)
 	conflicts := conflictingInstalledPackages(pkg)
 	if len(conflicts) == 0 {
-		fmt.Printf("Applying in %v, %v, %v\n", project.GetPath(), context.PackageFiles, filename)
 		pkg := extractPackage(project, context.PackageFiles, filename)
 		err := runOnInstall(pkg)
 
