@@ -17,7 +17,10 @@ def unchecked_coyote(*args, config="", env=os.environ):
     if "--fake-github" not in args:
         args = ["--fake-github"] + list(args)
 
-    run = lambda args: subprocess.run([str(coyote_path)] + list(args),
+    def run(args):
+        all_args = [str(coyote_path)] + list(args)
+        print("Running ", all_args)
+        return subprocess.run(all_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env)
@@ -44,7 +47,9 @@ def coyote(*args, config="", env=os.environ):
 
 
 def git(*args):
-    return subprocess.run(['git'] + list(args),
+    all_args = ['git'] + list(args)
+    print("Running " + repr(all_args))
+    return subprocess.run(all_args,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE)
 
@@ -64,38 +69,44 @@ class PackageTemplate:
         self.is_version_set = False
         self.need_commit = False
 
+
+    def _append(self, command):
+        print("Appending " + repr(command))
+        self.ops.append(command)
+        return self
+
     def version(self, v):
-        self.ops.append(('set_version', v))
+        self._append(('set_version', v))
         self.is_version_set = True
         return self
 
     def add_file(self, path, contents, executable=False):
-        self.ops.append(('add_file', path, contents, executable))
+        self._append(('add_file', path, contents, executable))
         self.need_commit = True
         return self
 
     def add_symlink(self, path, target):
-        self.ops.append(('add_symlink', path, target))
+        self._append(('add_symlink', path, target))
         self.need_commit = True
         return self
 
     def add_dependency(self, pkg, dep):
-        self.ops.append(('add_dependency', pkg, dep))
+        self._append(('add_dependency', pkg, dep))
         self.need_commit = True
         return self
 
     def add_conflict(self, pkg, conflict):
-        self.ops.append(('add_conflict', pkg, conflict))
+        self._append(('add_conflict', pkg, conflict))
         self.need_commit = True
         return self
 
     def on_install(self, pkg, script):
-        self.ops.append(('on_install', pkg, script))
+        self._append(('on_install', pkg, script))
         self.need_commit = True
         return self
 
     def commit(self, msg="No message given"):
-        self.ops.append(('commit', msg))
+        self._append(('commit', msg))
         self.need_commit = False
         return self
 
