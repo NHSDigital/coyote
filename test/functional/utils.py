@@ -47,9 +47,13 @@ def coyote(*args, config="", env=os.environ):
 
 def git(*args):
     all_args = ['git'] + list(args)
-    return subprocess.run(all_args,
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
+    result = subprocess.run(all_args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr.decode('utf-8', 'ignore'))
+        raise Exception(result.stderr.decode('utf-8', 'ignore'))
+    return result
 
 
 def create_package(name):
