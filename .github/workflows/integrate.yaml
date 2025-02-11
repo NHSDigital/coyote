@@ -26,7 +26,7 @@ jobs:
       - name: upload the binary as an artefact
         if: startsWith(github.event.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
-        id: coyote-binary
+        id: upload_coyote
         with:
           path: coyote.tar
           name: coyote.tar
@@ -60,7 +60,7 @@ jobs:
         with:
           name: coyote.tar
 
-      - run: tar -xf "${{steps.download_coyote.outputs.download-path}}"
+      - run: tar -xf "${{steps.download_coyote.outputs.download-path}}/coyote.tar"
 
       - name: build the release packages
         run: make -j4 packages
