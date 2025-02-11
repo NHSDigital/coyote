@@ -56,6 +56,11 @@ func (p PackageTarFileProvider) Open(location string) core.PackageFile {
 	return NewPackageFile(location)
 }
 
+/*
+Read a metadata field from the file.
+
+	Missing fields return an empty string, which is valid for (for instance) the on-install field
+*/
 func (p PackageTarFile) ReadMetadata(field string) string {
 	fileCheck := exec.Command("tar", "-tf", p.Filename, ".CYMETA/"+field)
 	if err := fileCheck.Run(); err != nil {
@@ -137,6 +142,9 @@ func tagFromVersion(version string) string {
 }
 
 func PackageBuild(pkgname string, outdir string, version string) (string, error) {
+	if pkgname == "" {
+		return "", fmt.Errorf("package name is required")
+	}
 	tempDir, err := os.MkdirTemp("", "coyote")
 	if err != nil {
 		return "", fmt.Errorf("error creating temp dir: %v", err)
@@ -178,7 +186,12 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	os.Mkdir(".cypkg/tmp", 0777)
 
 	filename := pkgname + "-" + version + ".cypkg"
-	exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".").Run()
+	tarCmd := exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".")
+	tarErr := tarCmd.Run()
+
+	if tarErr != nil {
+		return "", fmt.Errorf("error running tar command `%v`: %v", tarCmd, tarErr)
+	}
 
 	if _, err := os.Stat(outdir); os.IsNotExist(err) {
 		os.MkdirAll(outdir, 0777)
