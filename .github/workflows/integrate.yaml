@@ -56,10 +56,11 @@ jobs:
 
       - name: grab the coyote binary
         uses: actions/download-artifact@v4
+        id: download_coyote
         with:
           name: coyote.tar
-          path: coyote.tar
-      - run: tar -xf coyote.tar
+
+      - run: tar -xf "${{steps.download_coyote.outputs.download-path}}"
 
       - name: build the release packages
         run: make -j4 packages
