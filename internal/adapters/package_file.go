@@ -153,6 +153,9 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 		if version == "" {
 			version = versionFromTags()
 		}
+		if version == "" {
+			return "", fmt.Errorf("no version found")
+		}
 		rev := tagFromVersion(version)
 		cmd = exec.Command("git", "clone", "--branch", rev, ".", tempDir)
 	}
