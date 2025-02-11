@@ -181,6 +181,14 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	CopyFile(".cypkg/"+pkgname+"/CONFLICTS", tempDir+"/.CYMETA/CONFLICTS")
 	os.WriteFile(tempDir+"/.CYMETA/VERSION", []byte(version), 0777)
 	os.WriteFile(tempDir+"/.CYMETA/NAME", []byte(pkgname), 0777)
+
+	if check, err := os.ReadFile(tempDir + "/.CYMETA/NAME"); string(check) == "" {
+		return "", fmt.Errorf("error reading back NAME from metadata: %v", err)
+	}
+	if check, err := os.ReadFile(tempDir + "/.CYMETA/VERSION"); string(check) == "" {
+		return "", fmt.Errorf("error reading back VERSION from metadata: %v", err)
+	}
+
 	CopyFileIfExist(".cypkg/"+pkgname+"/on-install", tempDir+"/.CYMETA/on-install")
 
 	os.Mkdir(".cypkg/tmp", 0777)
