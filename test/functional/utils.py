@@ -19,6 +19,7 @@ def unchecked_coyote(*args, config="", env=os.environ):
 
     def run(args):
         all_args = [str(coyote_path)] + list(args)
+        print("Running " + repr(all_args))
         return subprocess.run(all_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
