@@ -56,5 +56,8 @@ build/bin-%/coyote: $(shell find . -type f -name '*.go')
 	export GOARCH=$$(echo $* | cut -d- -f2)
 	go build -o build/bin-$*/coyote ./cmd/coyote/main.go
 
+.PHONY: clean
+clean:
+	rm -rf build test/functional/.venv
 
 .ONESHELL:
