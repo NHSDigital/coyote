@@ -28,6 +28,7 @@ jobs:
         id: coyote-binary
         with:
           path: coyote.tar
+          name: coyote.tar
 
       - name: set up python
         uses: actions/setup-python@v2
@@ -55,7 +56,7 @@ jobs:
       - name: grab the coyote binary
         uses: actions/download-artifact@v4
         with:
-          name: coyote-binary
+          name: coyote.tar
           path: coyote.tar
       - run: tar -xf coyote.tar
 
