@@ -34,7 +34,9 @@ jobs:
           git config --global user.email "<>"
 
       - name: run functional tests
-        run: test/functional/.venv/bin/python -m pytest test/functional/test_apply.py -k test_apply_records_package_as_installed
+        run: |
+          make deps
+          test/functional/.venv/bin/python -m pytest test/functional/test_apply.py -k test_apply_records_package_as_installed
 
       - name: build the release packages
         run: make -j4 packages
