@@ -19,7 +19,6 @@ def unchecked_coyote(*args, config="", env=os.environ):
 
     def run(args):
         all_args = [str(coyote_path)] + list(args)
-        print("Running ", all_args)
         return subprocess.run(all_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -48,7 +47,6 @@ def coyote(*args, config="", env=os.environ):
 
 def git(*args):
     all_args = ['git'] + list(args)
-    print("Running " + repr(all_args))
     return subprocess.run(all_args,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE)
@@ -71,7 +69,6 @@ class PackageTemplate:
 
 
     def _append(self, command):
-        print("Appending " + repr(command))
         self.ops.append(command)
         return self
 
