@@ -21,7 +21,13 @@ jobs:
         run: make test-unit
 
       - name: build the binary
-        run: make exe
+        run: make exe && tar -cf coyote.tar build/bin/coyote
+
+      - name: upload the binary as an artefact
+        uses: actions/upload-artifact@v2
+        id: coyote-binary
+        with:
+          path: coyote.tar
 
       - name: set up python
         uses: actions/setup-python@v2
@@ -38,5 +44,23 @@ jobs:
           make deps
           test/functional/.venv/bin/python -m pytest test/functional/test_apply.py -k test_apply_records_package_as_installed
 
+  release:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.ref, 'refs/tags/v')
+    steps:
+      - name: checkout the code
+        uses: actions/checkout@v4
+
+      - name: grab the coyote binary
+        uses: actions/download-artifact@v4
+        with:
+          name: coyote-binary
+          path: coyote.tar
+      - run: tar -xf coyote.tar
+
       - name: build the release packages
         run: make -j4 packages
+
+      - name: perform the release
+        run: build/bin/coyote release ${{github.ref}} build/*.tgz
