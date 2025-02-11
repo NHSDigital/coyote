@@ -130,7 +130,7 @@ func versionFromTags() string {
 	version = strings.TrimSpace(version)
 	version = strings.TrimPrefix(version, "coyote-")
 	if version == "" {
-		panic(fmt.Errorf("no version found from version tags: ", output))
+		panic(fmt.Errorf("no version found from version tags: %v", output))
 	}
 	return version
 }
