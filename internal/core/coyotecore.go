@@ -61,11 +61,15 @@ func extractPackage(project Project, packageFiles IProvidePackageFiles, filename
 
 	var vars PackageTemplateVars
 	vars.ProjectName = project.GetName()
+
 	pkg := packageFiles.Open(filename)
 
 	pkg.Apply(vars)
 
-	project.RecordInstalledPackage(pkg)
+	err := project.RecordInstalledPackage(pkg)
+	if err != nil {
+		panic(err)
+	}
 
 	return pkg
 }

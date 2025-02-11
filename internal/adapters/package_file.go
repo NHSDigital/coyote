@@ -62,11 +62,11 @@ Read a metadata field from the file.
 	Missing fields return an empty string, which is valid for (for instance) the on-install field
 */
 func (p PackageTarFile) ReadMetadata(field string) string {
-	fileCheck := exec.Command("tar", "-tf", p.Filename, ".CYMETA/"+field)
+	fileCheck := exec.Command("tar", "-tf", p.Filename, "./.CYMETA/"+field)
 	if err := fileCheck.Run(); err != nil {
 		return ""
 	} else {
-		cmd := exec.Command("tar", "-xOf", p.Filename, ".CYMETA/"+field)
+		cmd := exec.Command("tar", "-xOf", p.Filename, "./.CYMETA/"+field)
 		output, err := cmd.Output()
 		if err != nil {
 			panic(err)
