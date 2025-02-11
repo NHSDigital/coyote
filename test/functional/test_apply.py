@@ -40,8 +40,10 @@ def test_apply_excludes_cymeta():
 def test_apply_records_package_as_installed():
     with CoyoteTestContext() as ctx:
         package_path = build_package(ctx.path(), 'test-package-root', 'test')
+        print(package_path)
 
         with NewProjectContext('target'):
+            assert package_path.is_file(), "sanity check failed"
             coyote('apply', package_path)
             assert(Path('.coyote/installed').is_file())
             assert(Path('.coyote/installed').read_text().strip() == 'test=v1.42.0')

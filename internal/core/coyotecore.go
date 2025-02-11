@@ -97,6 +97,9 @@ func runOnInstall(pkg PackageFile) error {
 }
 
 func Apply(context *Context, filename string) error {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return fmt.Errorf("package file not found: %v", err)
+	}
 	project := context.Projects.MaybeProject(".")
 	if project == nil {
 		return fmt.Errorf("not in a Coyote project")
