@@ -130,6 +130,11 @@ func initContext() {
 	if UseFakeGithub {
 		sourceControl = core.NewNullSourceControl()
 	} else {
+		token := os.Getenv("GITHUB_TOKEN")
+		if token == "" {
+			fmt.Fprintf(os.Stderr, "GITHUB_TOKEN environment variable is not set.  This is required for Github operations.")
+			os.Exit(1)
+		}
 		sourceControl = adapters.NewGithubSourceControl(os.Getenv("GITHUB_TOKEN"))
 	}
 
