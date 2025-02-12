@@ -69,6 +69,6 @@ jobs:
         run: make -j4 packages
 
       - name: perform the release
-        run: build/bin/coyote release ${{github.ref_name}} build/*.tgz/
+        run: build/bin/coyote release ${{github.ref_name}} build/*.tgz
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
