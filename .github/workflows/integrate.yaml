@@ -68,4 +68,4 @@ jobs:
         run: make -j4 packages
 
       - name: perform the release
-        run: build/bin/coyote release ${{github.ref}} build/*.tgz
+        run: build/bin/coyote release ${{github.ref_name}} build/*.tgz
