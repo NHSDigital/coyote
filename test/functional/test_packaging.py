@@ -195,3 +195,17 @@ def test_build_head():
         with NewDirContext(ctx.path() / 'extract'):
             assert(unpack(package_path).returncode == 0)
             assert(Path('canary').is_file())
+
+def test_runs_build_file():
+    with CoyoteTestContext() as ctx:
+        template = PackageTemplate('test-package-root')
+        package_path = template \
+            .add_file('canary', 'This file gets included') \
+            .add_file('dead_canary', 'This file should get skipped') \
+            .add_build_file('my-package', '#!/bin/sh\ntar -cf - canary') \
+            .build(ctx.path(), 'my-package')
+
+        with NewDirContext(ctx.path() / 'extract'):
+            assert(unpack(package_path).returncode == 0)
+            assert(Path('canary').is_file())
+            assert(not Path('dead_canary').exists())

@@ -30,6 +30,15 @@ func CopyFile(src, dst string) {
 	if err != nil {
 		panic(err)
 	}
+	// Set the permission bits
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		panic(err)
+	}
+	err = os.Chmod(dst, srcInfo.Mode())
+	if err != nil {
+		panic(err)
+	}
 }
 
 func CopyFileIfExist(src, dst string) {
@@ -145,15 +154,16 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	if pkgname == "" {
 		return "", fmt.Errorf("package name is required")
 	}
-	tempDir, err := os.MkdirTemp("", "coyote")
+	rootTempDir, err := os.MkdirTemp("", "coyote")
 	if err != nil {
 		return "", fmt.Errorf("error creating temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(rootTempDir)
 
 	var cmd *exec.Cmd
 	// We support the magic version "HEAD" which means the latest commit, and is only useful for testing
 	// This is the only way to build a package from a commit that isn't tagged
+	tempDir := rootTempDir + "/" + pkgname
 	if version == "HEAD" {
 		cmd = exec.Command("git", "clone", ".", tempDir)
 	} else {
@@ -165,7 +175,7 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 			return "", fmt.Errorf("no version found")
 		}
 		rev := tagFromVersion(version)
-		cmd = exec.Command("git", "clone", "--branch", rev, ".", tempDir)
+		cmd = exec.Command("git", "clone", "--depth", "1", "--branch", rev, ".", tempDir)
 	}
 
 	_, err = cmd.CombinedOutput()
@@ -173,6 +183,8 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 		return "", fmt.Errorf("error running clone command `%v` %v: %v", cmd, version, err)
 	}
 
+	buildFileName := rootTempDir + "/build"
+	CopyFileIfExist(tempDir+"/.cypkg/"+pkgname+"/build", buildFileName)
 	os.RemoveAll(tempDir + "/.git")
 	os.RemoveAll(tempDir + "/.cypkg")
 
@@ -198,11 +210,23 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	os.Mkdir(".cypkg/tmp", 0777)
 
 	filename := pkgname + "-" + version + ".cypkg"
-	tarCmd := exec.Command("tar", "-czf", ".cypkg/tmp/"+filename, "-C", tempDir, ".")
-	tarErr := tarCmd.Run()
 
+	// if there's a `build` script in the `.cypkg/pkgname` directory, run it. Otherwise default
+	// to the tar command.
+	var tarCmd *exec.Cmd
+	if _, err := os.Stat(buildFileName); err == nil {
+		tarCmd = exec.Command("sh", "-c", "cd "+tempDir+" && "+buildFileName)
+	} else {
+		tarCmd = exec.Command("tar", "-czf", "-", "-C", tempDir, ".")
+	}
+	tarOutput, tarErr := tarCmd.Output()
 	if tarErr != nil {
 		return "", fmt.Errorf("error running tar command `%v`: %v", tarCmd, tarErr)
+	}
+
+	err = os.WriteFile(".cypkg/tmp/"+filename, tarOutput, 0644)
+	if err != nil {
+		return "", fmt.Errorf("error writing tar output to file: %v", err)
 	}
 
 	if _, err := os.Stat(outdir); os.IsNotExist(err) {

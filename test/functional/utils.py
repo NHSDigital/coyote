@@ -108,10 +108,16 @@ class PackageTemplate:
         self.need_commit = True
         return self
 
+    def add_build_file(self, pkg, contents):
+        self._append(('add_build_file', pkg, contents))
+        self.need_commit = True
+        return self
+
     def commit(self, msg="No message given"):
         self._append(('commit', msg))
         self.need_commit = False
         return self
+
 
     def build(self, workdir, pkg, version=None):
         with NewDirContext(workdir / self.repo_root_name):
@@ -145,6 +151,9 @@ class PackageTemplate:
                 elif op[0] == 'on_install':
                     Path(f".cypkg/{op[1]}/on-install").write_text(op[2] + '\n')
                     Path(f".cypkg/{op[1]}/on-install").chmod(0o755)
+                elif op[0] == 'add_build_file':
+                    Path(f".cypkg/{op[1]}/build").write_text(op[2] + '\n')
+                    Path(f".cypkg/{op[1]}/build").chmod(0o755)
                 elif op[0] == 'commit':
                     git('add', '.')
                     git('commit', '-m', op[1])
