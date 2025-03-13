@@ -209,3 +209,22 @@ def test_runs_build_file():
             assert(unpack(package_path).returncode == 0)
             assert(Path('canary').is_file())
             assert(not Path('dead_canary').exists())
+
+def test_build_file_package_includes_metadata():
+    with CoyoteTestContext() as ctx:
+        template = PackageTemplate('test-package-root')
+        package_path = template \
+            .add_file('canary', 'This file gets included') \
+            .add_build_file('my-package', '#!/bin/sh\ntar -cf - canary') \
+            .build(ctx.path(), 'my-package')
+
+        with NewDirContext(ctx.path() / 'extract'):
+            assert(unpack(package_path).returncode == 0)
+            cymeta = Path('.CYMETA')
+            assert((cymeta / 'DEPENDS').is_file())
+            assert((cymeta / 'CONFLICTS').is_file())
+            assert((cymeta / 'VERSION').is_file())
+            assert((cymeta / 'NAME').is_file())
+
+            assert((cymeta / 'VERSION').read_text().strip() == 'v1.42.0')
+            assert((cymeta / 'NAME').read_text().strip() == 'my-package')

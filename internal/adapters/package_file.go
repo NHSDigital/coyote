@@ -41,8 +41,13 @@ func CopyFile(src, dst string) {
 	}
 }
 
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return !os.IsNotExist(err)
+}
+
 func CopyFileIfExist(src, dst string) {
-	if _, err := os.Stat(src); err == nil {
+	if fileExists(src) {
 		CopyFile(src, dst)
 	}
 }
@@ -188,6 +193,111 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	os.RemoveAll(tempDir + "/.git")
 	os.RemoveAll(tempDir + "/.cypkg")
 
+	err = buildMetadata(tempDir, pkgname, version)
+	if err != nil {
+		return "", err
+	}
+
+	filename := pkgname + "-" + version + ".cypkg"
+
+	var resultFilename string
+	if fileExists(buildFileName) {
+		resultFilename, err = buildWithBuildScript(tempDir, rootTempDir, filename, buildFileName)
+	} else {
+		resultFilename, err = buildDefaultPackage(tempDir, rootTempDir, filename)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	outfile := outdir + "/" + filename
+
+	if !fileExists(outdir) {
+		err = os.MkdirAll(outdir, 0777)
+		if err != nil {
+			return "", fmt.Errorf("error creating output directory: %v", err)
+		}
+	}
+
+	err = os.Rename(resultFilename, outfile)
+	if err != nil {
+		return "", fmt.Errorf("error moving the output file: %v", err)
+	}
+
+	return outfile, nil
+}
+
+func buildWithBuildScript(packageRootDir string, rootTempDir string, filename string, buildScript string) (string, error) {
+	cmd := exec.Command("sh", "-c", buildScript)
+	cmd.Dir = packageRootDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("error running build script `%v` %v: %v", cmd, buildScript, err)
+	}
+	tempFilename := rootTempDir + "/" + filename + ".tmp"
+
+	err = os.WriteFile(tempFilename, output, 0644)
+	if err != nil {
+		return "", fmt.Errorf("error writing build output to file: %v", err)
+	}
+
+	tarCmd := exec.Command("tar", "-rf", tempFilename, "-C", packageRootDir, ".CYMETA")
+	_, err = tarCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("error running tar command `%v`: %v", tarCmd, err)
+	}
+
+	targetFilename := rootTempDir + "/" + filename
+
+	err = gzipToFile(tempFilename, targetFilename)
+	if err != nil {
+		return "", fmt.Errorf("error gzipping file: %v", err)
+	}
+
+	return targetFilename, nil
+}
+
+func gzipToFile(srcFilename string, destFilename string) error {
+	tempFile, err := os.Open(srcFilename)
+	if err != nil {
+		return fmt.Errorf("error opening temp file: %v", err)
+	}
+	defer tempFile.Close()
+
+	targetFile, err := os.Create(destFilename)
+	if err != nil {
+		return fmt.Errorf("error creating target file: %v", err)
+	}
+	defer targetFile.Close()
+
+	gzipWriter := gzip.NewWriter(targetFile)
+	defer gzipWriter.Close()
+
+	_, err = io.Copy(gzipWriter, tempFile)
+	if err != nil {
+		return fmt.Errorf("error writing gzip output: %v", err)
+	}
+	return nil
+}
+
+func buildDefaultPackage(packageRootDir string, rootTempDir string, filename string) (string, error) {
+	tarCmd := exec.Command("tar", "-czf", "-", "-C", packageRootDir, ".")
+	tarOutput, tarErr := tarCmd.Output()
+	if tarErr != nil {
+		return "", fmt.Errorf("error running tar command `%v`: %v", tarCmd, tarErr)
+	}
+
+	targetFilename := rootTempDir + "/" + filename
+
+	err := os.WriteFile(targetFilename, tarOutput, 0644)
+	if err != nil {
+		return "", fmt.Errorf("error writing tar output to file: %v", err)
+	}
+
+	return targetFilename, nil
+}
+
+func buildMetadata(tempDir string, pkgname string, version string) error {
 	os.Mkdir(tempDir+"/.CYMETA", 0777)
 
 	os.WriteFile(tempDir+"/.CYMETA/DEPENDS", []byte(""), 0777)
@@ -199,50 +309,14 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	os.WriteFile(tempDir+"/.CYMETA/NAME", []byte(pkgname), 0777)
 
 	if check, err := os.ReadFile(tempDir + "/.CYMETA/NAME"); string(check) == "" {
-		return "", fmt.Errorf("error reading back NAME from metadata: %v", err)
+		fmt.Errorf("error reading back NAME from metadata: %v", err)
 	}
 	if check, err := os.ReadFile(tempDir + "/.CYMETA/VERSION"); string(check) == "" {
-		return "", fmt.Errorf("error reading back VERSION from metadata: %v", err)
+		fmt.Errorf("error reading back VERSION from metadata: %v", err)
 	}
 
 	CopyFileIfExist(".cypkg/"+pkgname+"/on-install", tempDir+"/.CYMETA/on-install")
-
-	os.Mkdir(".cypkg/tmp", 0777)
-
-	filename := pkgname + "-" + version + ".cypkg"
-
-	// if there's a `build` script in the `.cypkg/pkgname` directory, run it. Otherwise default
-	// to the tar command.
-	var tarCmd *exec.Cmd
-	if _, err := os.Stat(buildFileName); err == nil {
-		tarCmd = exec.Command("sh", "-c", "cd "+tempDir+" && "+buildFileName)
-	} else {
-		tarCmd = exec.Command("tar", "-czf", "-", "-C", tempDir, ".")
-	}
-	tarOutput, tarErr := tarCmd.Output()
-	if tarErr != nil {
-		return "", fmt.Errorf("error running tar command `%v`: %v", tarCmd, tarErr)
-	}
-
-	err = os.WriteFile(".cypkg/tmp/"+filename, tarOutput, 0644)
-	if err != nil {
-		return "", fmt.Errorf("error writing tar output to file: %v", err)
-	}
-
-	if _, err := os.Stat(outdir); os.IsNotExist(err) {
-		os.MkdirAll(outdir, 0777)
-	} else if err != nil {
-		return "", fmt.Errorf("error making the output dir: %v", err)
-	}
-
-	outfile := outdir + "/" + filename
-
-	err = os.Rename(".cypkg/tmp/"+filename, outfile)
-	if err != nil {
-		return "", fmt.Errorf("error moving the output file: %v", err)
-	}
-
-	return outfile, nil
+	return nil
 }
 
 func (p PackageTarFileProvider) Build(pkgname string, outdir string, version string) (string, error) {
