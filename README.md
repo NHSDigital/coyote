@@ -134,12 +134,14 @@ package.
 
 If you put a `DEPENDS` file in the `.cypkg/my-shiny-package`
 directory, the tools expect that to declare dependencies on other
-packages.  The format is one name per line.
+packages.  The format is one name per line.  You can omit this file,
+and the package will have no dependencies.
 
 Similarly if you put a `CONFLICTS` file in `.cypkg/my-shiny-package`,
 `coyote` will refuse to install a package to a repository that has a
 package listed in this file already installed.  The format is one name
-per line.
+per line.  You can omit this file, and the package will have no
+conflicts.
 
 If you put a `on-install` file in `.cypkg/my-shiny-package` directory,
 that file will be executed on the target after the package has been

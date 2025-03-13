@@ -177,8 +177,12 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	os.RemoveAll(tempDir + "/.cypkg")
 
 	os.Mkdir(tempDir+"/.CYMETA", 0777)
-	CopyFile(".cypkg/"+pkgname+"/DEPENDS", tempDir+"/.CYMETA/DEPENDS")
-	CopyFile(".cypkg/"+pkgname+"/CONFLICTS", tempDir+"/.CYMETA/CONFLICTS")
+
+	os.WriteFile(tempDir+"/.CYMETA/DEPENDS", []byte(""), 0777)
+	CopyFileIfExist(".cypkg/"+pkgname+"/DEPENDS", tempDir+"/.CYMETA/DEPENDS")
+	os.WriteFile(tempDir+"/.CYMETA/CONFLICTS", []byte(""), 0777)
+	CopyFileIfExist(".cypkg/"+pkgname+"/CONFLICTS", tempDir+"/.CYMETA/CONFLICTS")
+
 	os.WriteFile(tempDir+"/.CYMETA/VERSION", []byte(version), 0777)
 	os.WriteFile(tempDir+"/.CYMETA/NAME", []byte(pkgname), 0777)
 

@@ -75,6 +75,26 @@ def test_package_build_includes_package_metadata():
             assert((cymeta / 'VERSION').read_text().strip() == 'v1.42.0')
             assert((cymeta / 'NAME').read_text().strip() == 'test')
 
+def test_package_build_works_without_depends_and_conflicts_files():
+    with CoyoteTestContext() as ctx:
+        workdir = ctx.path()
+
+        pkgdir = workdir / 'test-package-root'
+        with NewDirContext(pkgdir):
+            create_package('test')
+            os.remove(pkgdir / '.cypkg' / 'test' / 'DEPENDS')
+            os.remove(pkgdir / '.cypkg' / 'test' / 'CONFLICTS')
+            git('tag', 'coyote-v1.42.0')
+            package_name = coyote('package', 'build', 'test').stdout.decode('utf-8').strip()
+
+            os.rename(package_name, workdir / package_name)
+
+        extractdir = workdir / 'extract'
+        with NewDirContext(extractdir):
+            assert(unpack(workdir / package_name).returncode == 0)
+            cymeta = Path('.CYMETA')
+            assert((cymeta / 'DEPENDS').is_file())
+            assert((cymeta / 'CONFLICTS').is_file())
 
 def test_package_build_excludes_cypkg_directory():
     with CoyoteTestContext() as ctx:
