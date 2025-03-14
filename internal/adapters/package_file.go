@@ -135,11 +135,11 @@ func (p PackageTarFileProvider) Init(pkgname string) error {
 // Versions are sorted alphabetically. No other format is imposed.
 // TODO: Is this actually a good idea? I find in trying out coyote that I want
 // to specify any old git ref as a version, not just tags.
-func versionFromTags() string {
+func versionFromTags() (string, error) {
 	cmd := exec.Command("git", "tag", "--list", "coyote-*")
 	output, err := cmd.Output()
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	versions := strings.Split(string(output), "\n")
@@ -148,7 +148,7 @@ func versionFromTags() string {
 	version := versions[len(versions)-1]
 	version = strings.TrimSpace(version)
 	version = strings.TrimPrefix(version, "coyote-")
-	return version
+	return version, nil
 }
 
 func tagFromVersion(version string) string {
@@ -174,7 +174,10 @@ func PackageBuild(pkgname string, outdir string, version string) (string, error)
 	} else {
 		// If no version is specified, we build the latest version that's been tagged
 		if version == "" {
-			version = versionFromTags()
+			version, err = versionFromTags()
+			if err != nil {
+				return "", fmt.Errorf("error getting latest version: %v", err)
+			}
 		}
 		if version == "" {
 			return "", fmt.Errorf("no version found")
@@ -375,4 +378,8 @@ func (p PackageTarFile) Apply(vars core.PackageTemplateVars) {
 
 		extractFile(header, vars, files)
 	}
+}
+
+func (p PackageTarFileProvider) Version() (string, error) {
+	return versionFromTags()
 }

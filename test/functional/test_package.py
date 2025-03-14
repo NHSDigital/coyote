@@ -33,3 +33,13 @@ def test_sanity_check_version():
 
             output = unchecked_coyote('--fake-github', 'package', 'release', 'test', bad_version)
             assert "invalid version" in output.stderr.decode('utf-8')
+
+def test_package_version():
+    with CoyoteTestContext() as ctx:
+        package_path = ctx.path() / "test-repo"
+        package_path.mkdir()
+        with DirContext(package_path):
+            create_package("test-package")
+            git("tag", "coyote-v1.42.0")
+            output = coyote('package', 'version')
+            assert "v1.42.0" in output.stdout.decode('utf-8')

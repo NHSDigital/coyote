@@ -44,9 +44,30 @@ type IProvideProjects interface {
 }
 
 type IProvidePackageFiles interface {
+	/*
+		Set up the current directory as a package repository, with one package
+		defined in the metadata.
+	*/
 	Init(pkgname string) error
+
+	/*
+		Build the named package in the current package directory, and write the
+		result to the output directory.  The version can be "HEAD", "",
+		or a specific version (without any `coyote-` prefix).
+	*/
 	Build(pkgname string, outdir string, version string) (string, error)
+
+	/*
+		Return a PackageFile, which can be used to read metadata or to apply it
+		to a project.
+	*/
 	Open(location string) PackageFile
+
+	/*
+		Return the version string of the package that would be built according
+		to the tags in the current package directory.
+	*/
+	Version() (string, error)
 }
 
 type IProvideSourceControl interface {

@@ -413,6 +413,25 @@ func PackageBuild(context *Context, pkgName string, outDir string, version strin
 	return context.PackageFiles.Build(pkgName, outDir, version)
 }
 
+func PackageVersion(context *Context) (string, error) {
+	// This function returns the version of the package that would be built
+	// by a raw `coyote package build` command.
+	// It does this by reading the version from the git tags, the same way
+	// that `package build` would if you didn't specify a version.
+
+	// Barf if we're not in a git repo
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		return "", fmt.Errorf("not in a git repository")
+	}
+
+	// Get the current version from the git tags
+	output, err := context.PackageFiles.Version()
+	if err != nil {
+		return "", fmt.Errorf("error getting version: %v", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // coyote package new <pkgName>
 // This creates a new package in the current directory, and pushes it
 // to github.

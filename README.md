@@ -165,7 +165,11 @@ Version numbers are expected to sort asciibetically. Otherwise there
 are no constraints.  They are stored as git tags, with an expected
 pattern of `coyote-WHATEVER`.  You can pass an explicit version to
 `coyote package build` if you want to build a version that is not the
-last in the sorted list.
+last in the sorted list.  Specify versions to `coyote package build`
+and `coyote package release` as the plain version number, without the
+`coyote-` prefix used in the tag.  The `coyote-` prefix is used to
+distinguish the tags from other tags in the repository, and does not
+form part of the version number.
 
 ## Usage
 
@@ -187,7 +191,7 @@ Delete the github repo `nhs-england-tools/cypkg-my-shiny-package`.
 
 Open the browser at the current git origin remote.
 
-`coyote package build my-shiny-package`
+`coyote package build my-shiny-package [version]`
 
 Copies non-git and non-coyote files to a temporary directory, and runs
 `build`.  The output has the `.CYPKG` directory added, and the
@@ -195,6 +199,20 @@ resulting tarball is zipped.
 
 The file will be written to the current directory as
 `my-shiny-package_<version>.cypkg`.
+
+If you specify the `version` argument, that will be the version of the
+package.  If you don't, the version will be the latest version in the
+sorted list of versions in the repository.
+
+You can also pass `HEAD` as the version, to build the package as at the
+most recent commit.
+
+`coyote package version`
+
+This prints out the version of the package that would be built if you
+ran `coyote package build` with no version qualifier.  Since all packages
+in a package repository share a version, you don't need to specify the
+package name.
 
 `coyote package release [version] [package...]`
 
