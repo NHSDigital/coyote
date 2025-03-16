@@ -175,7 +175,7 @@ def test_build_prior_version():
             .add_file('budgie', 'This is a later version') \
             .commit() \
             .version('v1.44.0') \
-            .build(ctx.path(), 'my-chosen-tech-stack', version='v1.43.0')
+            .build(ctx.path(), 'my-chosen-tech-stack', build_version='v1.43.0')
 
         # Now we check that when we unpack the package, we get the prior version
         with NewDirContext(ctx.path() / 'extract'):
@@ -189,7 +189,7 @@ def test_build_head():
         package_path = template \
             .add_file('canary', "This is a test file that isn't in a version-tagged commit") \
             .commit() \
-            .build(ctx.path(), 'my-chosen-tech-stack', version='HEAD')
+            .build(ctx.path(), 'my-chosen-tech-stack', build_version="HEAD")
 
         # Now we check that when we unpack the package, we get the file that's in the prior version
         with NewDirContext(ctx.path() / 'extract'):

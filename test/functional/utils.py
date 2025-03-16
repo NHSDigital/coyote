@@ -67,10 +67,11 @@ def create_package(name):
 
 
 class PackageTemplate:
-    def __init__(self, repo_root_name):
+    def __init__(self, repo_root_name, auto_version=True):
         self.ops = []
         self.repo_root_name = repo_root_name
         self.is_version_set = False
+        self.auto_version = auto_version
         self.need_commit = False
 
 
@@ -119,12 +120,12 @@ class PackageTemplate:
         return self
 
 
-    def build(self, workdir, pkg, version=None):
+    def build(self, workdir, pkg, build_version=None):
         with NewDirContext(workdir / self.repo_root_name):
             create_package(pkg)
             if self.need_commit:
                 self.commit()
-            if not self.is_version_set:
+            if not self.is_version_set and self.auto_version:
                 self.version('v1.42.0')
             for op in self.ops:
                 if op[0] == 'set_version':
@@ -158,7 +159,7 @@ class PackageTemplate:
                     git('add', '.')
                     git('commit', '-m', op[1])
             args = ['package', 'build', pkg]
-            if version is not None: args.append(version)
+            if build_version is not None: args.append(build_version)
             package_name = coyote(*args).stdout.decode('utf-8').strip()
             os.rename(package_name, workdir / package_name)
             return workdir / package_name
