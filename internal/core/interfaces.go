@@ -79,6 +79,7 @@ type IProvideSourceControl interface {
 	GetRateLimitDelayMilliseconds() int
 	DoesReleaseExist(repo string, org string, tag string) (bool, error)
 	DownloadReleaseFile(href string) (string, error)
+	GetRemoteURL(repo string, org string) string
 	Push(repo string, org string) error
 }
 

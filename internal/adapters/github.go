@@ -267,11 +267,15 @@ func urlToGithubRepo(parsedUrl *url.URL) (string, string) {
 	return repo, org
 }
 
+func (s GithubSourceControl) GetRemoteURL(repo string, org string) string {
+	return "https://github.com/" + org + "/" + repo + ".git"
+}
+
 func (s GithubSourceControl) Push(repo string, org string) error {
 	// This function pushes the current directory to the remote repository.
 	// It returns an error if the push fails.
 	// Just use git for now.
-	repoUrl := "https://github.com/" + org + "/" + repo + ".git"
+	repoUrl := s.GetRemoteURL(repo, org)
 	cmd := exec.Command("git", "push", repoUrl, "HEAD")
 	err := cmd.Run()
 	if err != nil {

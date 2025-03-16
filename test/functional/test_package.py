@@ -8,7 +8,16 @@ def test_package_new():
         package_org = "test-github-org"
         config=f"package_org = \"{package_org}\"\nindex = \"/dev/null\""
         output = coyote('--fake-github', 'package', 'new', 'test', config=config)
-        assert 'NullSourceControl.CreateRepo( cypkg-test , test-github-org )' in output.stdout.decode('utf-8')
+        assert f"NullSourceControl.CreateRepo( cypkg-test , {package_org} )" in output.stdout.decode('utf-8')
+
+def test_package_new_sets_origin():
+    with CoyoteTestContext() as ctx:
+        package_org = "test-github-org"
+        config=f"package_org = \"{package_org}\"\nindex = \"/dev/null\""
+        coyote('--fake-github', 'package', 'new', 'test', config=config)
+        with DirContext("cypkg-test") as dir:
+            output = git("remote", "get-url", "origin")
+            assert f"fake-remote-url" in output.stdout.decode('utf-8')
 
 # TODO Tests for package release.
 # The following is from the readme:

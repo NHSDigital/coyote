@@ -95,6 +95,11 @@ func (s *NullSourceControl) DownloadReleaseFile(href string) (string, error) {
 	return targetFilename, nil
 }
 
+func (s *NullSourceControl) GetRemoteURL(repo string, org string) string {
+	fmt.Println("NullSourceControl called: NullSourceControl.GetRemoteURL(", repo, ",", org, ")")
+	return "fake-remote-url"
+}
+
 func (s *NullSourceControl) Push(repo string, org string) error {
 	fmt.Println("NullSourceControl called: NullSourceControl.Push(", repo, ",", org, ")")
 	return nil

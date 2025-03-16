@@ -502,6 +502,14 @@ func PackageNew(context *Context, pkgName string) error {
 		}
 	}
 
+	remoteURL := sourceControl.GetRemoteURL(actualName, packageOrg)
+
+	// Now we can set the remote and push
+	err = exec.Command("git", "remote", "add", "origin", remoteURL).Run()
+	if err != nil {
+		return fmt.Errorf("error adding remote: %v", err)
+	}
+
 	return context.SourceControl.Push(actualName, packageOrg)
 }
 
