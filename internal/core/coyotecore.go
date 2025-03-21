@@ -563,6 +563,28 @@ func pushTagsToOrigin() error {
 	return exec.Command("git", "push", "origin", "--follow-tags").Run()
 }
 
+func commitForTag(tag string) (string, error) {
+	commitHashBuf, err := exec.Command("git", "rev-list", "-n", "1", tag).Output()
+	if err != nil {
+		return "", fmt.Errorf("error getting commit hash for tag: %v", err)
+	}
+	return strings.TrimSpace(string(commitHashBuf)), nil
+}
+
+func commitExistsAtOrigin(context *Context, pkgName string, tag string) (bool, error) {
+	commitHash, err := commitForTag(tag)
+	if err != nil {
+		return false, err
+	}
+
+	// Now check if the commit hash exists on any branch at the origin
+	output, err := exec.Command("git", "branch", "-r", "--contains", commitHash).Output()
+	if err != nil {
+		return false, fmt.Errorf("error checking for commit at origin: %v", err)
+	}
+	return strings.Contains(string(output), "origin/"), nil
+}
+
 func PackageRelease(context *Context, pkgName string, version string) (string, error) {
 	//Barf if we're not in a coyote package
 	if _, err := os.Stat(".cypkg"); os.IsNotExist(err) {
@@ -577,6 +599,21 @@ func PackageRelease(context *Context, pkgName string, version string) (string, e
 	tag, err := tagForRelease(version, context, pkgName)
 	if err != nil {
 		return "", err
+	}
+
+	commitHash, err := commitForTag(tag)
+	if err != nil {
+		return "", fmt.Errorf("error getting commit hash for tag: %v", err)
+	}
+
+	// Check that the tag exists at the origin. If we don't do this, then trying to push
+	// the tag will fail, the release won't run, and we'll have to clean up the tag locally.
+	commitExists, err := commitExistsAtOrigin(context, pkgName, commitHash)
+	if err != nil {
+		return "", fmt.Errorf("error checking for tag at origin: %v", err)
+	}
+	if !commitExists {
+		return "", fmt.Errorf("the release commit %s does not exist at the origin", commitHash)
 	}
 
 	// We know the tag exists in the repo, so we can now build the tag.
