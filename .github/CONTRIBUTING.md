@@ -18,7 +18,7 @@ If you have an idea for a new feature, please open an issue.  Please include as 
 
 ### I have implemented a new feature
 
-If you have implemented a new feature, this is also excellent.  Please open a pull request.  Include a description of the feature, and please do make sure there's a test that demonstrates the feature.  But be aware that there may need to be some discussion before it is can be merged.
+If you have implemented a new feature, this is also excellent.  Please open a pull request.  Include a description of the feature, and please do make sure there's a test that demonstrates the feature.  But be aware that there may need to be some discussion before it can be merged.
 
 ## How to navigate this repository
 
