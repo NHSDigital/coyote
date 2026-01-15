@@ -372,7 +372,7 @@ func (p PackageTarFile) Apply(vars core.PackageTemplateVars) {
 			panic(err)
 		}
 
-		if strings.HasPrefix(header.Name, "./.CYMETA/") {
+		if strings.HasPrefix(header.Name, "./.CYMETA/") || strings.HasPrefix(header.Name, ".CYMETA/") || header.Name == ".CYMETA" {
 			continue
 		}
 

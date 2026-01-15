@@ -9,6 +9,46 @@ def test_init_creates_project_dir():
         assert ctx.path('my-project').exists()
         assert not ctx.path('.coyote').is_file()
 
+def test_init_does_not_create_cymeta_at_top_level():
+    with CoyoteTestContext() as ctx:
+        coyote('init', 'empty', 'my-project')
+        assert not ctx.path('my-project/.CYMETA').exists()
+
+def test_init_from_package_does_not_create_cymeta_at_top_level():
+    with CoyoteTestContext() as ctx:
+        package_path = PackageTemplate('test-package-root') \
+            .add_file('canary', 'This is a test package') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+        index = Indexer(package_path).build(ctx)
+        coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
+        assert not ctx.path('my-new-project/.CYMETA').exists()
+
+def test_init_from_package_with_dependency_does_not_create_cymeta_at_top_level():
+    with CoyoteTestContext() as ctx:
+        package_a_path = PackageTemplate('package-a-root') \
+            .add_dependency('my-chosen-tech-stack', 'upstream-dependency') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+
+        package_b_path = PackageTemplate('package-b-root') \
+            .add_file('canary', 'This is a test package') \
+            .build(ctx.path(), 'upstream-dependency')
+
+        index = Indexer(package_a_path, package_b_path).build(ctx)
+
+        coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
+
+        assert not ctx.path('my-new-project/.CYMETA').exists()
+
+def test_init_from_package_with_build_script_does_not_create_cymeta_at_top_level():
+    with CoyoteTestContext() as ctx:
+        package_path = PackageTemplate('test-package-root') \
+            .add_file('canary', 'This is a test package') \
+            .add_build_file('my-chosen-tech-stack', '#!/bin/sh\ntar -cf - canary') \
+            .build(ctx.path(), 'my-chosen-tech-stack')
+        index = Indexer(package_path).build(ctx)
+        coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
+        assert not ctx.path('my-new-project/.CYMETA').exists()
+
 def test_init_saves_project_name():
     with CoyoteTestContext() as ctx:
         with NewProjectContext('my-project') as project:
@@ -133,3 +173,4 @@ def test_init_applies_project_name_template_value():
         coyote('init', 'my-chosen-tech-stack', 'my-new-project', '--index', index.target_path)
 
         assert Path('my-new-project', 'templated-file').read_text() == 'This is a test package in my-new-project'
+
