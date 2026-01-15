@@ -6,6 +6,34 @@ The problem this solves is supplying repository structures in a
 manageable way, to supply pre-canned functionality that allows reuse,
 upgrading, versioning, and all that goodness.
 
+## Table of Contents
+
+- [coyote](#coyote)
+  - [Table of Contents](#table-of-contents)
+  - [Dependencies](#dependencies)
+  - [Very quick introduction (local operation)](#very-quick-introduction-local-operation)
+    - [0. Build the `coyote` binary](#0-build-the-coyote-binary)
+    - [1. Setup](#1-setup)
+    - [2. Make a new project](#2-make-a-new-project)
+    - [3. Running the tests](#3-running-the-tests)
+  - [`coyote` Version Policy](#coyote-version-policy)
+  - [The concepts](#the-concepts)
+    - [Source repositories](#source-repositories)
+    - [Package](#package)
+    - [Package list](#package-list)
+    - [Package index](#package-index)
+  - [Assumptions](#assumptions)
+  - [Sources and packages](#sources-and-packages)
+    - [Package versions](#package-versions)
+  - [Usage](#usage)
+  - [Where Do We Go From Here](#where-do-we-go-from-here)
+  - [Author](#author)
+
+## Dependencies
+
+`coyote` expects `git`, `bash`, `tar` and (for the moment) `wget`
+to be on `$PATH`.  You will not get very far without them.
+
 ## Very quick introduction (local operation)
 
 This may seem verbose, but until we have some more of the
@@ -17,7 +45,7 @@ place.
 If you have `go` already installed, to build `coyote` you run:
 
 ```sh
- $ make
+make
 ```
 
 That will put a `coyote` executable at `build/bin/coyote`, which from
@@ -37,7 +65,7 @@ text file there. It doesn't have to be in your home directory.
 
 Now, open an `index-src` file, and add the following contents:
 
-```
+```text
 https://github.com/NHSDigital/cypkg-repository-template/releases/download/coyote-0.0.3/default.repository-template-0.0.3.cypkg
 https://github.com/NHSDigital/cypkg-python-hello-world/releases/download/coyote-0.0.1/default.python-hello-world-0.0.1.cypkg
 ```
@@ -49,8 +77,8 @@ auth token with rights to see download internal repositories in the
 Now run this command, substituting the `index` path if you changed it
 above:
 
-```
- $ $COYOTE index build ./index-src ~/.coyote-index
+```sh
+$COYOTE index build ./index-src ~/.coyote-index
 ```
 
 [Note: `coyote` can accept a remote index URL which avoids this step,
@@ -60,10 +88,10 @@ but I haven't set up hosting it yet.]
 
 Run the following:
 
-```
- $ $COYOTE init python-hello-world my-shiny-project
- $ cd my-shiny-project
- $ ls
+```sh
+$COYOTE init python-hello-world my-shiny-project
+cd my-shiny-project
+ls
 ```
 
 You will see that `main.py` is listed.  Looking at the
@@ -85,17 +113,22 @@ it needed to install the dependency for you.
 
 The functional tests are in `tests/functional`.  You can run them like so:
 
-```
- $ make test
+```sh
+make test
 ```
 
 Alternatively if you want more control you can run:
 
+```sh
+make sh
+cd test/functional
+pytest
 ```
- $ make sh
- $ cd test/functional
- $ pytest
-```
+
+## `coyote` Version Policy
+
+`coyote` will use [semantic versioning](https://semver.org/).  The current version is pre-1.0.0, so all bets are off.  Once we hit 1.0.0, we will follow the rules of semantic versioning, and will start using semantic commits.
+
 
 ## The concepts
 
