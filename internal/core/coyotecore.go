@@ -413,6 +413,23 @@ func PackageBuild(context *Context, pkgName string, outDir string, version strin
 	return context.PackageFiles.Build(pkgName, outDir, version)
 }
 
+func PackageBuildAll(context *Context, outDir string, version string) ([]string, error) {
+	packages, err := context.PackageFiles.ListPackages()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []string
+	for _, pkg := range packages {
+		filename, err := context.PackageFiles.Build(pkg, outDir, version)
+		if err != nil {
+			return nil, fmt.Errorf("error building package %s: %v", pkg, err)
+		}
+		results = append(results, filename)
+	}
+	return results, nil
+}
+
 func PackageVersion(context *Context) (string, error) {
 	// This function returns the version of the package that would be built
 	// by a raw `coyote package build` command.

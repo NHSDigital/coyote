@@ -58,6 +58,11 @@ type IProvidePackageFiles interface {
 	Build(pkgname string, outdir string, version string) (string, error)
 
 	/*
+		List all package names defined in the .cypkg directory.
+	*/
+	ListPackages() ([]string, error)
+
+	/*
 		Return a PackageFile, which can be used to read metadata or to apply it
 		to a project.
 	*/

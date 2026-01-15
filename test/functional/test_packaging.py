@@ -228,3 +228,22 @@ def test_build_file_package_includes_metadata():
 
             assert((cymeta / 'VERSION').read_text().strip() == 'v1.42.0')
             assert((cymeta / 'NAME').read_text().strip() == 'my-package')
+
+def test_package_build_all():
+    with CoyoteTestContext():
+        os.makedirs('.cypkg/package-one')
+        os.makedirs('.cypkg/package-two')
+        Path('.cypkg/package-one/DEPENDS').write_text('')
+        Path('.cypkg/package-one/CONFLICTS').write_text('')
+        Path('.cypkg/package-two/DEPENDS').write_text('')
+        Path('.cypkg/package-two/CONFLICTS').write_text('')
+        with open('example-file', 'w') as f: f.write('Yes, this file exists.')
+        git('init')
+        git('add', '.')
+        git('commit', '-m', 'initial commit')
+        git('tag', 'coyote-v1.0.0')
+
+        coyote('package', 'build', '--all')
+
+        assert os.path.isfile('package-one-v1.0.0.cypkg')
+        assert os.path.isfile('package-two-v1.0.0.cypkg')

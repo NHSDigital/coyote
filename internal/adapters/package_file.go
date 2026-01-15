@@ -130,6 +130,21 @@ func (p PackageTarFileProvider) Init(pkgname string) error {
 	return PackageInit(pkgname)
 }
 
+func (p PackageTarFileProvider) ListPackages() ([]string, error) {
+	entries, err := os.ReadDir(".cypkg")
+	if err != nil {
+		return nil, fmt.Errorf("error reading .cypkg directory: %v", err)
+	}
+
+	var packages []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			packages = append(packages, entry.Name())
+		}
+	}
+	return packages, nil
+}
+
 // This function defines the versioning scheme for coyote packages.
 // Any git tag that starts with "coyote-" is considered a coyote package version.
 // Versions are sorted alphabetically. No other format is imposed.
