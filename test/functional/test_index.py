@@ -106,3 +106,58 @@ def test_index_release_fails_if_not_in_git_repo():
         cmd = unchecked_coyote('index', 'release', 'index-src', "doesntmatter")
         assert("not in a git repository" in cmd.stderr.decode('utf-8'))
 
+
+def test_index_stores_multiple_versions_of_same_package():
+    with CoyoteTestContext() as ctx:
+        # Build two versions of the same package
+        package_v1 = PackageTemplate('test-package-v1') \
+            .version('v1.0.0') \
+            .add_file('canary', 'version 1') \
+            .build(ctx.path(), 'my-package')
+        package_v2 = PackageTemplate('test-package-v2') \
+            .version('v2.0.0') \
+            .add_file('canary', 'version 2') \
+            .build(ctx.path(), 'my-package')
+
+        index_source_path = ctx.path()/"index-source"
+        index_source_path.write_text('\n'.join([str(package_v1), str(package_v2)]))
+        target_path = ctx.path()/"index.cyi"
+
+        coyote('index', 'build', index_source_path, target_path)
+
+        index = json.loads(target_path.read_text())
+        # The index should have both versions
+        assert('my-package' in index['packages'])
+        pkg_entry = index['packages']['my-package']
+        assert('versions' in pkg_entry)
+        assert(len(pkg_entry['versions']) == 2)
+        versions = {v['version']: v for v in pkg_entry['versions']}
+        assert('v1.0.0' in versions)
+        assert('v2.0.0' in versions)
+
+
+def test_index_latest_version_is_determined_correctly():
+    with CoyoteTestContext() as ctx:
+        # Build versions where semantic versioning matters (1.0.11 > 1.0.2)
+        package_v1 = PackageTemplate('test-package-v1') \
+            .version('v1.0.2') \
+            .build(ctx.path(), 'my-package')
+        package_v2 = PackageTemplate('test-package-v2') \
+            .version('v1.0.11') \
+            .build(ctx.path(), 'my-package')
+        package_v15 = PackageTemplate('test-package-v15') \
+            .version('v1.0.5') \
+            .build(ctx.path(), 'my-package')
+
+        index_source_path = ctx.path()/"index-source"
+        # Add in non-sorted order
+        index_source_path.write_text('\n'.join([str(package_v2), str(package_v1), str(package_v15)]))
+        target_path = ctx.path()/"index.cyi"
+
+        coyote('index', 'build', index_source_path, target_path)
+
+        index = json.loads(target_path.read_text())
+        pkg_entry = index['packages']['my-package']
+        # The latest should be v1.0.11 (highest by semantic versioning, not asciibetic)
+        assert(pkg_entry['version'] == 'v1.0.11')
+

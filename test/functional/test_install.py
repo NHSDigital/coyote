@@ -169,3 +169,62 @@ def notest_install_a_remote_package():
             with NewProjectContext('my-new-project'):
                 coyote('install', 'my-dependency', '--index', index.target_path)
                 assert(Path('canary').is_file())
+
+
+def test_install_picks_latest_version_when_multiple_versions_in_index():
+    with CoyoteTestContext() as ctx:
+        # Build two versions of the same package with different canary contents
+        # Note: add_file + commit must come before version so the file is committed before tagging
+        package_v1 = PackageTemplate('test-package-root') \
+            .add_file('canary', 'version 1') \
+            .commit('add canary v1') \
+            .version('v1.0.0') \
+            .build(ctx.path(), 'my-dependency')
+        package_v2 = PackageTemplate('test-package-root-v2') \
+            .add_file('canary', 'version 2') \
+            .commit('add canary v2') \
+            .version('v2.0.0') \
+            .build(ctx.path(), 'my-dependency')
+        # Include both versions in the index
+        index = Indexer(package_v1, package_v2).build(ctx)
+        with NewProjectContext('my-new-project'):
+            coyote('install', 'my-dependency', '--index', index.target_path)
+            # Should install the latest version (v2.0.0)
+            assert(Path('canary').read_text() == 'version 2')
+
+
+def test_install_explicit_version():
+    with CoyoteTestContext() as ctx:
+        # Build two versions of the same package with different canary contents
+        # Note: add_file + commit must come before version so the file is committed before tagging
+        package_v1 = PackageTemplate('test-package-root') \
+            .add_file('canary', 'version 1') \
+            .commit('add canary v1') \
+            .version('v1.0.0') \
+            .build(ctx.path(), 'my-dependency')
+        package_v2 = PackageTemplate('test-package-root-v2') \
+            .add_file('canary', 'version 2') \
+            .commit('add canary v2') \
+            .version('v2.0.0') \
+            .build(ctx.path(), 'my-dependency')
+        # Include both versions in the index
+        index = Indexer(package_v1, package_v2).build(ctx)
+        with NewProjectContext('my-new-project'):
+            # Explicitly install v1.0.0
+            coyote('install', 'my-dependency@v1.0.0', '--index', index.target_path)
+            assert(Path('canary').read_text() == 'version 1')
+
+
+def test_install_explicit_version_not_found():
+    with CoyoteTestContext() as ctx:
+        package_v1 = PackageTemplate('test-package-root') \
+            .add_file('canary', 'version 1') \
+            .commit('add canary') \
+            .version('v1.0.0') \
+            .build(ctx.path(), 'my-dependency')
+        index = Indexer(package_v1).build(ctx)
+        with NewProjectContext('my-new-project'):
+            cmd = unchecked_coyote('install', 'my-dependency@v9.9.9', '--index', index.target_path)
+            assert(cmd.returncode != 0)
+            assert('version v9.9.9 not found' in cmd.stderr.decode('utf-8') or
+                   'not found' in cmd.stderr.decode('utf-8'))

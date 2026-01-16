@@ -145,7 +145,10 @@ publish more than one package.
 
 ### Package list
 
-A list of packages, and versions.
+A list of packages, with their versions and locations.  The index can
+contain multiple versions of the same package; when installing, the
+most recent version (by semantic versioning) is selected by default,
+or a specific version can be requested.
 
 ### Package index
 
@@ -255,12 +258,18 @@ currently checked out, pushes the tag (and if necessary any local
 patches).  Pushes each `<package>_<version>.cypkg` as release to the
 source repository, identified as the git `origin` remote.
 
-`coyote install <package>`
+`coyote install <package>[@<version>]`
 
 Grabs the latest version of the package index. Fleshes out the
 dependency list for the named package, building an ordered list that
 are then installed without invalidating the dependency requirements of
 any package installed.
+
+If the index contains multiple versions of a package, the most recent
+version (using semantic versioning) is installed by default.  For
+example, version 1.0.11 is considered more recent than 1.0.2.  You can
+specify a particular version by appending `@<version>` to the package
+name, for example `coyote install my-package@1.0.0`.
 
 `coyote apply <package-file>`
 

@@ -6,6 +6,55 @@ import (
 	"testing"
 )
 
+func TestCompareSemanticVersions(t *testing.T) {
+	testCases := []struct {
+		a, b     string
+		expected int
+	}{
+		// Basic comparisons
+		{"1.0.0", "1.0.0", 0},
+		{"2.0.0", "1.0.0", 1},
+		{"1.0.0", "2.0.0", -1},
+
+		// Minor version comparisons
+		{"1.1.0", "1.0.0", 1},
+		{"1.0.0", "1.1.0", -1},
+
+		// Patch version comparisons
+		{"1.0.1", "1.0.0", 1},
+		{"1.0.0", "1.0.1", -1},
+
+		// Semantic versioning: 1.0.11 > 1.0.2 (not asciibetic!)
+		{"1.0.11", "1.0.2", 1},
+		{"1.0.2", "1.0.11", -1},
+
+		// With 'v' prefix
+		{"v1.0.11", "v1.0.2", 1},
+		{"v2.0.0", "v1.9.9", 1},
+
+		// Mixed prefix
+		{"v1.0.0", "1.0.0", 0},
+
+		// Partial versions
+		{"1.0", "1.0.0", 0},
+		{"1", "1.0.0", 0},
+		{"2", "1.9.9", 1},
+
+		// With suffixes
+		{"1.0.0-alpha", "1.0.0-beta", -1},
+		{"1.0.0-beta", "1.0.0-alpha", 1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s_vs_%s", tc.a, tc.b), func(t *testing.T) {
+			result := CompareSemanticVersions(tc.a, tc.b)
+			if result != tc.expected {
+				t.Errorf("CompareSemanticVersions(%q, %q) = %d, want %d", tc.a, tc.b, result, tc.expected)
+			}
+		})
+	}
+}
+
 func TestPackageRelease(t *testing.T) {
 
 	t.Run("Test not in a Coyote package", func(t *testing.T) {

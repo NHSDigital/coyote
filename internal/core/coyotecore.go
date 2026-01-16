@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 	"time"
 )
@@ -166,10 +167,11 @@ func Init(context *Context, techStack string, projectName string) error {
 	}
 }
 
-func installPackageTree(project Project, sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkg string, index Index, reinstall bool) error {
+func installPackageTree(project Project, sourceControl IProvideSourceControl, packageFiles IProvidePackageFiles, pkgSpec string, index Index, reinstall bool) error {
 	// reinstall *only* applies to the named package. Nothing else is reinstalled.
+	// pkgSpec can be "package" or "package@version"
 
-	depQueue := []string{pkg}
+	depQueue := []string{pkgSpec}
 	depsToInstall := []string{}
 
 	for len(depQueue) > 0 {
@@ -181,6 +183,7 @@ func installPackageTree(project Project, sourceControl IProvideSourceControl, pa
 				dep, index.Describe(), err)
 		}
 		for _, newDep := range newDeps {
+			// Dependencies don't include version specs, just package names
 			if !stringInSlice(newDep, depQueue) && !stringInSlice(newDep, depsToInstall) {
 				depQueue = append(depQueue, newDep)
 			}
@@ -233,7 +236,11 @@ func installPackageTree(project Project, sourceControl IProvideSourceControl, pa
 			return fmt.Errorf("error reading installed packages: %v", err)
 		}
 
-		if stringInSlice(dep, installedPackages) && !(reinstall && dep == pkg) {
+		// Parse the package spec to get just the name for comparison with installed packages
+		depName, _ := ParsePackageSpec(dep)
+		pkgName, _ := ParsePackageSpec(pkgSpec)
+
+		if stringInSlice(depName, installedPackages) && !(reinstall && depName == pkgName) {
 			continue
 		}
 
@@ -296,20 +303,32 @@ func removeComments(body string) []string {
 	return result
 }
 
-func readIndexEntry(packageFiles IProvidePackageFiles, packageLocation string) PackageIndexEntry {
+func readIndexEntry(packageFiles IProvidePackageFiles, packageLocation string) PackageVersionEntry {
 	file := packageFiles.Open(packageLocation)
 
-	return PackageIndexEntry{
-		Name:         file.ReadMetadata("NAME"),
+	return PackageVersionEntry{
 		Version:      file.ReadMetadata("VERSION"),
 		Conflicts:    removeComments(file.ReadMetadata("CONFLICTS")),
 		Dependencies: removeComments(file.ReadMetadata("DEPENDS")),
 	}
 }
 
+func readPackageName(packageFiles IProvidePackageFiles, packageLocation string) string {
+	file := packageFiles.Open(packageLocation)
+	return file.ReadMetadata("NAME")
+}
+
+func sortVersionsDescending(versions []PackageVersionEntry) {
+	sort.Slice(versions, func(i, j int) bool {
+		return CompareSemanticVersions(versions[i].Version, versions[j].Version) > 0 // Descending order
+	})
+}
+
 func BuildIndex(context *Context, indexSourceFilename string, indexFilename string) error {
 	// This function reads an index source file, and outputs an index file.
 	// The index file is a map of package names to locations and dependencies.
+	// Multiple versions of the same package can be present; the latest version
+	// (by asciibetic sort) is used as the default.
 	// Locations in the index source file can be relative to the file being indexed, or absolute.
 	// Index file locations will always be absolute.
 	//
@@ -326,8 +345,7 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 	// The index file is a json file. At the top level we have `version` and `packages`.
 	// `version` is the version of the index file format.
 	// `packages` is a map of package names to package metadata.
-	// Each package metadata is a map of metadata fields to values.
-	// The metadata fields are `name`, `version`, `location`, `conflicts`, and `dependencies`.
+	// Each package metadata contains a list of versions with their metadata.
 
 	packages := make(map[string]PackageIndexEntry)
 	indexSourceScanner := bufio.NewScanner(indexSource)
@@ -356,31 +374,58 @@ func BuildIndex(context *Context, indexSourceFilename string, indexFilename stri
 		if _, err := os.Stat(localLocation); errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("package file missing: %s", localLocation)
 		}
-		pkg := readIndexEntry(context.PackageFiles, localLocation)
-		if pkg.Name == "" {
+
+		pkgName := readPackageName(context.PackageFiles, localLocation)
+		if pkgName == "" {
 			// This is a proper "this should never happen" - if we can't get the name of the package
 			// then something has gone wrong upstream.
 			panic(fmt.Sprintf("package name in %s is empty.", localLocation))
 		}
-		pkg.Location = packageLocation
-		packages[pkg.Name] = pkg
+
+		versionEntry := readIndexEntry(context.PackageFiles, localLocation)
+		versionEntry.Location = packageLocation
+
+		if existing, ok := packages[pkgName]; ok {
+			// Add this version to the existing package entry
+			existing.Versions = append(existing.Versions, versionEntry)
+			packages[pkgName] = existing
+		} else {
+			// Create a new package entry with this version
+			packages[pkgName] = PackageIndexEntry{
+				Name:     pkgName,
+				Versions: []PackageVersionEntry{versionEntry},
+			}
+		}
+	}
+
+	// Sort versions and set the latest version info for each package
+	for name, pkg := range packages {
+		sortVersionsDescending(pkg.Versions)
+		latest := pkg.Versions[0]
+		pkg.Version = latest.Version
+		pkg.Location = latest.Location
+		pkg.Dependencies = latest.Dependencies
+		pkg.Conflicts = latest.Conflicts
+		packages[name] = pkg
 	}
 
 	// Now for each package, we need to check that the conflicts are reflected both ways.
 	// We do this by iterating over the conflicts, and then adding the package to the conflicts
 	// field of the conflicting package.
+	// Note: We only check conflicts for the latest version of each package
 	for _, pkg := range packages {
 		for _, conflict := range pkg.Conflicts {
-			if _, ok := packages[conflict]; ok {
-				if !stringInSlice(pkg.Name, packages[conflict].Conflicts) {
-					// Can't assign to pkg.Conflicts, so we have to make a new one.
-					packages[conflict] = PackageIndexEntry{
-						Name:         packages[conflict].Name,
-						Version:      packages[conflict].Version,
-						Location:     packages[conflict].Location,
-						Dependencies: packages[conflict].Dependencies,
-						Conflicts:    append(packages[conflict].Conflicts, pkg.Name),
+			if conflictPkg, ok := packages[conflict]; ok {
+				if !stringInSlice(pkg.Name, conflictPkg.Conflicts) {
+					// Add to the package-level conflicts
+					conflictPkg.Conflicts = append(conflictPkg.Conflicts, pkg.Name)
+					// Also add to each version's conflicts
+					for i := range conflictPkg.Versions {
+						if !stringInSlice(pkg.Name, conflictPkg.Versions[i].Conflicts) {
+							conflictPkg.Versions[i].Conflicts = append(conflictPkg.Versions[i].Conflicts, pkg.Name)
+						}
 					}
+					packages[conflict] = conflictPkg
 				}
 			} else {
 				// We don't have the named package in the index. The most dangerous case is that
