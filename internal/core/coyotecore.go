@@ -286,6 +286,168 @@ func Install(context *Context, pkgName string, reinstall bool) error {
 	return installPackageTree(project, context.SourceControl, context.PackageFiles, pkgName, index, reinstall)
 }
 
+func Upgrade(context *Context, pkgNames []string) error {
+	project := context.Projects.MaybeProject(".")
+	if project == nil {
+		return fmt.Errorf("not in a Coyote project")
+	}
+
+	// Get all installed packages
+	installedPackages, err := project.ReadInstalledPackages()
+	if err != nil {
+		return fmt.Errorf("error reading installed packages: %v", err)
+	}
+
+	// Open the index
+	indexLocation := context.Config.GetIndex()
+	index, err := openIndex(context, indexLocation)
+	if err != nil {
+		return fmt.Errorf("error opening index file: %v", err)
+	}
+
+	// Determine which packages to upgrade
+	var packagesToCheck []string
+	if len(pkgNames) == 0 {
+		// Upgrade all installed packages
+		for _, pkg := range installedPackages {
+			if len(pkg) >= 2 {
+				packagesToCheck = append(packagesToCheck, pkg[0])
+			}
+		}
+	} else {
+		packagesToCheck = pkgNames
+	}
+
+	if len(packagesToCheck) == 0 {
+		// Nothing to upgrade
+		return nil
+	}
+
+	// Phase 1: Collect all upgrade targets and validate
+	type upgradeTarget struct {
+		pkgName          string
+		installedVersion string
+		targetVersion    PackageVersionEntry
+	}
+	var upgrades []upgradeTarget
+
+	for _, pkgName := range packagesToCheck {
+		// Find the installed version
+		var installedVersion string
+		for _, pkg := range installedPackages {
+			if len(pkg) >= 2 && pkg[0] == pkgName {
+				installedVersion = pkg[1]
+				break
+			}
+		}
+
+		if installedVersion == "" {
+			// If specific packages were requested, error if not installed
+			if len(pkgNames) > 0 {
+				return fmt.Errorf("package %s is not installed", pkgName)
+			}
+			// Otherwise skip (upgrading all, package not installed)
+			continue
+		}
+
+		// Get the package entry from the index
+		pkgEntry, err := index.indexFile.GetPackage(pkgName)
+		if err != nil {
+			if len(pkgNames) > 0 {
+				return fmt.Errorf("package %s not found in index: %v", pkgName, err)
+			}
+			// Skip packages not in index when upgrading all
+			continue
+		}
+
+		// Get the latest version
+		latestVersion, err := pkgEntry.GetLatestVersion()
+		if err != nil {
+			if len(pkgNames) > 0 {
+				return fmt.Errorf("error getting latest version for %s: %v", pkgName, err)
+			}
+			continue
+		}
+
+		// Compare versions - if already at latest, skip
+		if CompareSemanticVersions(installedVersion, latestVersion.Version) >= 0 {
+			continue
+		}
+
+		upgrades = append(upgrades, upgradeTarget{
+			pkgName:          pkgName,
+			installedVersion: installedVersion,
+			targetVersion:    latestVersion,
+		})
+	}
+
+	if len(upgrades) == 0 {
+		// Nothing to upgrade
+		return nil
+	}
+
+	// Phase 2: Check all conflicts BEFORE making any changes
+	// Build a set of packages that will be upgraded (to exclude from conflict checks)
+	upgradeSet := make(map[string]bool)
+	for _, u := range upgrades {
+		upgradeSet[u.pkgName] = true
+	}
+
+	// Build the list of packages that will remain installed (not being upgraded)
+	var remainingPackages []string
+	for _, pkg := range installedPackages {
+		if len(pkg) >= 1 && !upgradeSet[pkg[0]] {
+			remainingPackages = append(remainingPackages, pkg[0])
+		}
+	}
+
+	// Check each upgrade target for conflicts
+	for _, u := range upgrades {
+		// Check conflicts with packages that will remain installed
+		for _, conflict := range u.targetVersion.Conflicts {
+			if stringInSlice(conflict, remainingPackages) {
+				return fmt.Errorf("cannot upgrade %s to %s: conflicts with installed package %s",
+					u.pkgName, u.targetVersion.Version, conflict)
+			}
+		}
+
+		// Check conflicts with other packages being upgraded
+		for _, other := range upgrades {
+			if other.pkgName == u.pkgName {
+				continue
+			}
+			if stringInSlice(other.pkgName, u.targetVersion.Conflicts) {
+				return fmt.Errorf("cannot upgrade %s to %s: conflicts with %s",
+					u.pkgName, u.targetVersion.Version, other.pkgName)
+			}
+		}
+	}
+
+	// Phase 3: All checks passed, perform the actual upgrades
+	for _, u := range upgrades {
+		location := u.targetVersion.Location
+		if locationIsRemote(location) {
+			location, err = context.SourceControl.DownloadReleaseFile(location)
+			if err != nil {
+				return fmt.Errorf("error downloading package %s: %v", u.pkgName, err)
+			}
+			defer os.Remove(location)
+		}
+
+		if _, err := os.Stat(location); err != nil {
+			return fmt.Errorf("package file missing for %s: %v", u.pkgName, err)
+		}
+
+		pkg := extractPackage(project, context.PackageFiles, location)
+		err = runOnInstall(pkg)
+		if err != nil {
+			return fmt.Errorf("error running on-install script for %s: %v", u.pkgName, err)
+		}
+	}
+
+	return nil
+}
+
 func locationIsRemote(location string) bool {
 	return strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://")
 }
